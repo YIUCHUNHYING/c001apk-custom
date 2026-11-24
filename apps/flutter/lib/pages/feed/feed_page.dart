@@ -77,7 +77,8 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _showSource = false;
   Datum? _supplementData;
-  bool _autoOpenCommentsDone = false;
+  // 独立路由宽屏下右侧评论栏是否展开（设置开关打开时默认展开）。
+  bool _sideCommentsVisible = true;
 
   void _updateSupplement(BuildContext context) {
     final state = _feedController.feedState.value;
@@ -425,31 +426,16 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
     return size.shortestSide >= 600 || size.width >= 720;
   }
 
-  /// 打开右侧评论：分栏容器走通知；独立路由走 Scaffold.endDrawer。
+  /// 打开右侧评论：分栏容器走通知；独立路由下右栏是 body 的一部分，直接 setState。
   void _openCommentsInPane(BuildContext context) {
     if (ReadingCommentsScope.inPaneOf(context)) {
       ReadingCommentsOpen(
         _id,
-        (paneContext) => _buildCommentsPane(paneContext),
+        (paneContext) => _buildCommentsPane(paneContext, docked: true),
       ).dispatch(context);
-    } else {
-      _scaffoldKey.currentState?.openEndDrawer();
+    } else if (mounted) {
+      setState(() => _sideCommentsVisible = true);
     }
-  }
-
-  /// 设置开启时，评论数据首次就绪后自动在右侧弹出一次。
-  void _autoOpenComments(BuildContext context) {
-    if (_autoOpenCommentsDone ||
-        !_canUseSideComments(context) ||
-        ReadingCommentsScope.activeOf(context)) {
-      return;
-    }
-    final replyState = _feedController.loadingState.value;
-    if (replyState is! Success) return;
-    _autoOpenCommentsDone = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && context.mounted) _openCommentsInPane(context);
-    });
   }
 
   Widget _buildPinWidget(BuildContext context) {
@@ -828,9 +814,20 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
     );
   }
 
+  /// 关闭右侧评论：分栏容器走通知；独立路由（body 内嵌）直接 setState 收起。
+  void _closeCommentsPane(BuildContext context, {required bool docked}) {
+    if (docked) {
+      ReadingCommentsClose(_id).dispatch(context);
+    } else if (mounted) {
+      setState(() => _sideCommentsVisible = false);
+    }
+  }
+
   /// 右侧评论面板。评论列表与正文内嵌版共用 [_buildFeedReply]，因此滚动、
   /// 加载更多、置顶、酷币折叠、点赞/回复等状态都保持同一份。
-  Widget _buildCommentsPane(BuildContext context) {
+  ///
+  /// [docked] 为 true 表示挂在分栏容器右侧栏，否则是独立路由 body 内嵌分栏。
+  Widget _buildCommentsPane(BuildContext context, {bool docked = false}) {
     final colors = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -859,28 +856,24 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
               IconButton(
                   tooltip: '收起评论',
                   icon: const Icon(Icons.chevron_right),
-                  onPressed: () {
-                    // 分栏容器走通知收起；独立路由的 endDrawer 直接 pop。
-                    if (ReadingCommentsScope.inPaneOf(context)) {
-                      ReadingCommentsClose(_id).dispatch(context);
-                    } else if (Navigator.of(context).canPop()) {
-                      Navigator.of(context).pop();
-                    }
-                  }),
+                  onPressed: () =>
+                      _closeCommentsPane(context, docked: docked)),
             ]),
           ),
         ),
         Divider(height: 1, color: colors.outlineVariant.withValues(alpha: .5)),
+        // 用 Obx 包住整段滚动视图，评论加载状态一变化就整体重建，
+        // 避免把 Obx 直接塞进 slivers 造成 sliver 代理不渲染的空白问题。
         Expanded(
-          child: CustomScrollView(
+          child: Obx(() => CustomScrollView(
             key: PageStorageKey('feed-comments:$_id'),
             physics: const AlwaysScrollableScrollPhysics(
               parent: BouncingScrollPhysics(),
             ),
             slivers: [
-              Obx(() => _buildFeedReply(_feedController.loadingState.value)),
+              _buildFeedReply(_feedController.loadingState.value),
             ],
-          ),
+          )),
         ),
       ],
     );
@@ -922,23 +915,9 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
     // 评论已移到右侧面板时，正文只保留内容，避免同一批评论重复出现。
     final commentsInPane = ReadingCommentsScope.activeOf(context);
     _updateSupplement(context);
-    _autoOpenComments(context);
-    // 独立路由（如小平板不进入分栏时）用 endDrawer 从右侧弹出评论；
-    // 分栏容器已有自己的右侧评论栏，不再重复提供。
-    final standaloneComments = !ReadingCommentsScope.inPaneOf(context) &&
-        _canUseSideComments(context);
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: Theme.of(context).colorScheme.surface,
-      endDrawerEnableOpenDragGesture: standaloneComments,
-      endDrawer: standaloneComments
-          ? Drawer(
-              width: (MediaQuery.sizeOf(context).width * 0.42)
-                  .clamp(300.0, 460.0)
-                  .toDouble(),
-              child: _buildCommentsPane(context),
-            )
-          : null,
       floatingActionButton: Obx(
         () => _feedController.feedState.value is Success &&
                 !wide &&
@@ -1127,45 +1106,125 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
           ),
         ),
       ),
-      body: Obx(
-        () => _feedController.feedState.value is Success
-            ? ExpressiveRefreshIndicator(
-                notificationPredicate: (notification) {
-                  if (notification.depth != 0 ||
-                      notification.metrics.axis != Axis.vertical) {
-                    return false;
-                  }
-                  final double offset = notification.metrics.pixels;
-                  _titleVisible.value = offset > 50;
-                  return true;
-                },
-                refreshKey: _refreshKey,
-                onRefresh: () async {
-                  _feedController.onReset();
-                  await _feedController.onGetData();
-                },
-                child: CustomScrollView(
-                  key: PageStorageKey('feed-reading:$_id'),
-                  controller: _scrollController,
-                  physics: const AlwaysScrollableScrollPhysics(
-                    parent: BouncingScrollPhysics(),
-                  ),
-                  slivers: [
-                    if (wide)
-                      const SliverToBoxAdapter(child: SizedBox(height: 12)),
-                    _feedController.articleList.isNullOrEmpty
-                        ? SliverToBoxAdapter(
-                            child: _buildFeedContent(
-                                _feedController.feedState.value))
-                        : _buildFeedContent(_feedController.feedState.value),
-                    if (!commentsInPane) _buildPinWidget(context),
-                    if (!commentsInPane)
-                      _buildFeedReply(_feedController.loadingState.value),
-                  ],
-                ),
-              )
-            : Center(child: _buildFeedContent(_feedController.feedState.value)),
+      body: _buildBody(context, wide: wide, commentsInPane: commentsInPane),
+    );
+  }
+
+  /// 帖子正文滚动区（含下拉刷新）。[withComments] 控制是否把评论内嵌在底部。
+  Widget _buildArticleView(BuildContext context,
+      {required bool wide, required bool withComments}) {
+    return ExpressiveRefreshIndicator(
+      notificationPredicate: (notification) {
+        if (notification.depth != 0 ||
+            notification.metrics.axis != Axis.vertical) {
+          return false;
+        }
+        final double offset = notification.metrics.pixels;
+        _titleVisible.value = offset > 50;
+        return true;
+      },
+      refreshKey: _refreshKey,
+      onRefresh: () async {
+        _feedController.onReset();
+        await _feedController.onGetData();
+      },
+      child: CustomScrollView(
+        key: PageStorageKey('feed-reading:$_id'),
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        slivers: [
+          if (wide) const SliverToBoxAdapter(child: SizedBox(height: 12)),
+          _feedController.articleList.isNullOrEmpty
+              ? SliverToBoxAdapter(
+                  child: _buildFeedContent(_feedController.feedState.value))
+              : _buildFeedContent(_feedController.feedState.value),
+          if (withComments) _buildPinWidget(context),
+          if (withComments)
+            _buildFeedReply(_feedController.loadingState.value),
+        ],
       ),
     );
+  }
+
+  /// 窄屏下正文底部一个紧凑入口，用于重新打开被收起的右侧评论栏。
+  Widget _buildReopenCommentsEntry(BuildContext context) {
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      child: InkWell(
+        onTap: () => _openCommentsInPane(context),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(children: [
+            Icon(Icons.forum_outlined,
+                size: 20, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Obx(() => Text(
+                  '共 ${_feedController.replyNum} 条评论 · 点击查看',
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w600))),
+            ),
+            const Icon(Icons.chevron_right, size: 18),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context,
+      {required bool wide, required bool commentsInPane}) {
+    // 独立路由且屏幕够宽 + 开关开启：小红书式左右分栏。
+    final inPane = ReadingCommentsScope.inPaneOf(context);
+    final sideBySide =
+        !inPane && _canUseSideComments(context) && _sideCommentsVisible;
+    return Obx(() {
+      if (_feedController.feedState.value is! Success) {
+        return Center(child: _buildFeedContent(_feedController.feedState.value));
+      }
+      if (sideBySide) {
+        final colors = Theme.of(context).colorScheme;
+        final totalWidth = MediaQuery.sizeOf(context).width;
+        final commentsWidth = (totalWidth * 0.40).clamp(320.0, 480.0).toDouble();
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: _buildArticleView(context, wide: wide, withComments: false),
+            ),
+            SizedBox(
+              width: commentsWidth,
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    left: BorderSide(
+                      color: colors.outlineVariant.withValues(alpha: .5),
+                    ),
+                  ),
+                ),
+                child: _buildCommentsPane(context, docked: false),
+              ),
+            ),
+          ],
+        );
+      }
+      // 分栏容器（评论移入其右侧栏）或窄屏：正文内嵌评论，正常堆叠。
+      return Column(children: [
+        Expanded(
+          child: _buildArticleView(
+            context,
+            wide: wide,
+            withComments: !commentsInPane,
+          ),
+        ),
+        if (!inPane &&
+            _canUseSideComments(context) &&
+            !_sideCommentsVisible &&
+            !commentsInPane)
+          _buildReopenCommentsEntry(context),
+      ]);
+    });
   }
 }

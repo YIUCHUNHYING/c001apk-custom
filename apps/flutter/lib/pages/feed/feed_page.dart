@@ -21,6 +21,7 @@ import '../../components/reading_presentation.dart';
 import '../../components/footer.dart';
 import '../../components/sliver_pinned_box_adapter.dart';
 import '../../components/cards/feed_card.dart';
+import 'feed_comment_side_sheet.dart';
 import '../../logic/model/feed/datum.dart';
 import '../../logic/media/feed_media_context.dart';
 import '../../logic/state/loading_state.dart';
@@ -172,6 +173,7 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
   }
 
   late final String _random = DeviceUtil.randHexString(8);
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   late final _feedController = Get.put(
     FeedController(
       id: _id,
@@ -402,6 +404,14 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
                   child: Text('评论 · ${_feedController.replyNum}',
                       style: const TextStyle(
                           fontSize: 18, fontWeight: FontWeight.w700))),
+              FilledButton.tonalIcon(
+                icon: const Icon(Icons.dock, size: 16),
+                label: const Text('右侧展示评论'),
+                onPressed: () {
+                  _scaffoldKey.currentState?.openEndDrawer();
+                },
+              ),
+              const SizedBox(width: 8),
               Obx(() => PopupMenuButton<ReplySortType>(
                     tooltip: '评论排序',
                     initialValue: _feedController.replySelection.value,
@@ -788,7 +798,25 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
     final wide = ReadingPresentation.of(context);
     _updateSupplement(context);
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: Theme.of(context).colorScheme.surface,
+      endDrawerEnableOpenDragGesture: wide,
+      endDrawer: wide
+          ? Drawer(
+              width: 420,
+              shape: const RoundedRectangleBorder(),
+              child: FeedCommentSideSheet(
+                controller: _feedController,
+                onClose: () => Navigator.of(context).pop(),
+                onReply: _onReply,
+                onToggleReplyTop: _onToggleReplyTop,
+                onBlockReply: _feedController.onBlockReply,
+                postLikeDeleteFollow: _feedController.postLikeDeleteFollow,
+                onLike: _feedController.onLike,
+                changeReplySort: _changeReplySort,
+              ),
+            )
+          : null,
       floatingActionButton: Obx(
         () => _feedController.feedState.value is Success &&
                 !wide &&
@@ -874,6 +902,26 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
             ),
             actions: _feedController.feedState.value is Success
                 ? [
+                    if (wide)
+                      Obx(
+                        () => IconButton(
+                          tooltip: '在右侧展示评论',
+                          icon: Badge(
+                            isLabelVisible:
+                                (_feedController.replyNum ?? 0) > 0,
+                            label: Text('${_feedController.replyNum ?? 0}'),
+                            child: const Icon(Icons.forum_outlined),
+                          ),
+                          onPressed: () {
+                            if (_scaffoldKey.currentState?.isEndDrawerOpen ==
+                                true) {
+                              Navigator.of(context).pop();
+                            } else {
+                              _scaffoldKey.currentState?.openEndDrawer();
+                            }
+                          },
+                        ),
+                      ),
                     if (wide)
                       IconButton(
                         tooltip: '查看作者',

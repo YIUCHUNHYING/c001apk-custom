@@ -35,6 +35,18 @@ class Reply2ReplyPage extends StatelessWidget {
       builder: (controller) => CupertinoPageScaffold(
         navigationBar: CupertinoNavigationBar(
             backgroundColor: Theme.of(context).colorScheme.surface,
+            leading: Navigator.of(context).canPop()
+                ? CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Icon(CupertinoIcons.back),
+                  )
+                : null,
+            trailing: CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Icon(CupertinoIcons.xmark, size: 18),
+            ),
             middle: Text(
               '共 $replynum 回复',
               maxLines: 1,

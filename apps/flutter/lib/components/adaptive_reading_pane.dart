@@ -535,12 +535,17 @@ class ReadingContentFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     final scale =
         (MediaQuery.textScalerOf(context).scale(16) / 16).clamp(1.0, 1.5);
+    final size = MediaQuery.sizeOf(context);
+    // 宽屏（可左右分栏）时占满全屏，让帖子与评论充分利用横向空间；
+    // 窄屏仍限制可读行宽，避免每行文字过长。
+    final isWide = size.shortestSide >= 600 || size.width >= 720;
+    final maxWidth =
+        isWide ? double.infinity : (700 * scale).clamp(680.0, 760.0);
     return ColoredBox(
       color: Theme.of(context).colorScheme.surfaceContainerLow,
       child: Center(
           child: ConstrainedBox(
-        constraints:
-            BoxConstraints(maxWidth: (700 * scale).clamp(680.0, 760.0)),
+        constraints: BoxConstraints(maxWidth: maxWidth),
         child: child,
       )),
     );

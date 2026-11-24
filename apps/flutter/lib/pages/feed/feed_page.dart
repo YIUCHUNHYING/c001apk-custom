@@ -1229,12 +1229,14 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
         );
       }
       // 分栏容器（评论移入其右侧栏）或窄屏：正文内嵌评论，正常堆叠。
+      // 独立路由宽屏收起评论后，评论完全隐藏，帖子占满整行，仅保留底部重开入口。
+      final embedComments = inPane ? !commentsInPane : !_canUseSideComments(context);
       return Column(children: [
         Expanded(
           child: _buildArticleView(
             context,
             wide: wide,
-            withComments: !commentsInPane,
+            withComments: embedComments,
           ),
         ),
         if (!inPane &&

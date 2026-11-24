@@ -1,0 +1,73 @@
+name: Build Custom APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, feature/*]
+    paths:
+      - 'apps/flutter/**'
+      - '.github/workflows/build-apk.yml'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: apps/flutter
+
+jobs:
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '12266719'
+          packages: 'platform-tools'
+
+      - name: Install Android Build Tools and NDK
+        run: |
+          yes | sdkmanager --licenses || true
+          sdkmanager 'platforms;android-37.0' 'build-tools;37.0.0' 'ndk;28.2.13676358'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+
+      - name: Sync build date
+        run: dart tool/update_build_date.dart || true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build APK (Release mode)
+        run: |
+          flutter build apk --release --split-per-abi
+
+      - name: Collect Output APKs
+        run: |
+          mkdir -p build/outputs_apk
+          find build/app/outputs/flutter-apk/ -name "*.apk" -exec cp {} build/outputs_apk/ \;
+          ls -lh build/outputs_apk/
+
+      - name: Upload APK Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: c001apk-custom-apks
+          path: apps/flutter/build/outputs_apk/*.apk
+          retention-days: 14

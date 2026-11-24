@@ -3,10 +3,8 @@ name: Build Custom APK
 on:
   workflow_dispatch:
   push:
-    branches: [main, feature/*]
-    paths:
-      - 'apps/flutter/**'
-      - '.github/workflows/build-apk.yml'
+    branches:
+      - '**'
 
 permissions:
   contents: read
@@ -19,7 +17,7 @@ jobs:
   build-apk:
     name: Build Android APK
     runs-on: ubuntu-22.04
-    timeout-minutes: 40
+    timeout-minutes: 45
 
     steps:
       - name: Checkout repository
@@ -42,7 +40,7 @@ jobs:
           yes | sdkmanager --licenses || true
           sdkmanager 'platforms;android-37.0' 'build-tools;37.0.0' 'ndk;28.2.13676358'
 
-      - name: Set up Flutter
+      - name: Set up Flutter 3.47.7
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.7'
@@ -63,6 +61,7 @@ jobs:
         run: |
           mkdir -p build/outputs_apk
           find build/app/outputs/flutter-apk/ -name "*.apk" -exec cp {} build/outputs_apk/ \;
+          echo "=== 打包完成，产物清单如下 ==="
           ls -lh build/outputs_apk/
 
       - name: Upload APK Artifacts

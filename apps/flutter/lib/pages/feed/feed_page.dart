@@ -21,7 +21,6 @@ import '../../components/reading_presentation.dart';
 import '../../components/footer.dart';
 import '../../components/sliver_pinned_box_adapter.dart';
 import '../../components/cards/feed_card.dart';
-import 'feed_comment_side_sheet.dart';
 import '../../logic/model/feed/datum.dart';
 import '../../logic/media/feed_media_context.dart';
 import '../../logic/state/loading_state.dart';
@@ -173,7 +172,6 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
   }
 
   late final String _random = DeviceUtil.randHexString(8);
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   late final _feedController = Get.put(
     FeedController(
       id: _id,
@@ -392,6 +390,39 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
     _refreshKey.currentState?.show();
   }
 
+  /// 评论排序菜单。[tooltip] 由调用方决定，避免正文与右侧面板同时出现时
+  /// 产生重复的 `byTooltip('评论排序')` 命中。
+  Widget _buildSortMenu(String tooltip) => Obx(() => PopupMenuButton<ReplySortType>(
+        tooltip: tooltip,
+        initialValue: _feedController.replySelection.value,
+        onSelected: _changeReplySort,
+        itemBuilder: (_) => [
+          for (final option in _shirtSizeOptions)
+            CheckedPopupMenuItem(
+                value: option.$1,
+                checked: option.$1 == _feedController.replySelection.value,
+                child: Text(option.$2))
+        ],
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Text(_shirtSizeOptions
+                .firstWhere((option) =>
+                    option.$1 == _feedController.replySelection.value)
+                .$2),
+            const Icon(Icons.expand_more, size: 20),
+          ]),
+        ),
+      ));
+
+  /// 宽屏下把评论从正文抽到右侧栏的入口。仅在可弹出的分栏阅读中可用。
+  void _openCommentsInPane(BuildContext context) {
+    ReadingCommentsOpen(
+      _id,
+      (paneContext) => _buildCommentsPane(paneContext),
+    ).dispatch(context);
+  }
+
   Widget _buildPinWidget(BuildContext context) {
     if (ReadingPresentation.of(context)) {
       return SliverPinnedBoxAdapter(
@@ -404,38 +435,12 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
                   child: Text('评论 · ${_feedController.replyNum}',
                       style: const TextStyle(
                           fontSize: 18, fontWeight: FontWeight.w700))),
-              FilledButton.tonalIcon(
-                icon: const Icon(Icons.dock, size: 16),
-                label: const Text('右侧展示评论'),
-                onPressed: () {
-                  _scaffoldKey.currentState?.openEndDrawer();
-                },
-              ),
-              const SizedBox(width: 8),
-              Obx(() => PopupMenuButton<ReplySortType>(
-                    tooltip: '评论排序',
-                    initialValue: _feedController.replySelection.value,
-                    onSelected: _changeReplySort,
-                    itemBuilder: (_) => [
-                      for (final option in _shirtSizeOptions)
-                        CheckedPopupMenuItem(
-                            value: option.$1,
-                            checked: option.$1 ==
-                                _feedController.replySelection.value,
-                            child: Text(option.$2))
-                    ],
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Text(_shirtSizeOptions
-                            .firstWhere((option) =>
-                                option.$1 ==
-                                _feedController.replySelection.value)
-                            .$2),
-                        const Icon(Icons.expand_more, size: 20),
-                      ]),
-                    ),
-                  )),
+              _buildSortMenu('评论排序'),
+              if (ReadingCommentsScope.inPaneOf(context))
+                IconButton(
+                    tooltip: '在右侧查看评论',
+                    icon: const Icon(Icons.view_sidebar_outlined),
+                    onPressed: () => _openCommentsInPane(context)),
               if (GlobalData().isLogin)
                 IconButton(
                     tooltip: '回复',
@@ -763,6 +768,58 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
     );
   }
 
+  /// 右侧评论面板。评论列表与正文内嵌版共用 [_buildFeedReply]，因此滚动、
+  /// 加载更多、置顶、酷币折叠、点赞/回复等状态都保持同一份。
+  Widget _buildCommentsPane(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Material(
+          color: colors.surface,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(children: [
+              Expanded(
+                child: Obx(() => Text('评论 · ${_feedController.replyNum}',
+                    style: const TextStyle(
+                        fontSize: 17, fontWeight: FontWeight.w700))),
+              ),
+              // 面板内使用不同 tooltip，保证 '评论排序' 只命中正文标题栏。
+              _buildSortMenu('评论排序方式'),
+              if (GlobalData().isLogin)
+                IconButton(
+                    tooltip: '回复',
+                    icon: const Icon(Icons.edit_outlined),
+                    onPressed: () => _onReply(
+                        ReplyType.feed,
+                        _feedController.id,
+                        _feedController.feedUsername,
+                        null)),
+              IconButton(
+                  tooltip: '收起评论',
+                  icon: const Icon(Icons.chevron_right),
+                  onPressed: () =>
+                      ReadingCommentsClose(_id).dispatch(context)),
+            ]),
+          ),
+        ),
+        Divider(height: 1, color: colors.outlineVariant.withValues(alpha: .5)),
+        Expanded(
+          child: CustomScrollView(
+            key: PageStorageKey('feed-comments:$_id'),
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            slivers: [
+              Obx(() => _buildFeedReply(_feedController.loadingState.value)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Obx(() {
@@ -796,27 +853,11 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
 
   Widget _buildReadingScreen(BuildContext context) {
     final wide = ReadingPresentation.of(context);
+    // 评论已移到右侧面板时，正文只保留内容，避免同一批评论重复出现。
+    final commentsInPane = ReadingCommentsScope.activeOf(context);
     _updateSupplement(context);
     return Scaffold(
-      key: _scaffoldKey,
       backgroundColor: Theme.of(context).colorScheme.surface,
-      endDrawerEnableOpenDragGesture: wide,
-      endDrawer: wide
-          ? Drawer(
-              width: 420,
-              shape: const RoundedRectangleBorder(),
-              child: FeedCommentSideSheet(
-                controller: _feedController,
-                onClose: () => Navigator.of(context).pop(),
-                onReply: _onReply,
-                onToggleReplyTop: _onToggleReplyTop,
-                onBlockReply: _feedController.onBlockReply,
-                postLikeDeleteFollow: _feedController.postLikeDeleteFollow,
-                onLike: _feedController.onLike,
-                changeReplySort: _changeReplySort,
-              ),
-            )
-          : null,
       floatingActionButton: Obx(
         () => _feedController.feedState.value is Success &&
                 !wide &&
@@ -902,26 +943,6 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
             ),
             actions: _feedController.feedState.value is Success
                 ? [
-                    if (wide)
-                      Obx(
-                        () => IconButton(
-                          tooltip: '在右侧展示评论',
-                          icon: Badge(
-                            isLabelVisible:
-                                (_feedController.replyNum ?? 0) > 0,
-                            label: Text('${_feedController.replyNum ?? 0}'),
-                            child: const Icon(Icons.forum_outlined),
-                          ),
-                          onPressed: () {
-                            if (_scaffoldKey.currentState?.isEndDrawerOpen ==
-                                true) {
-                              Navigator.of(context).pop();
-                            } else {
-                              _scaffoldKey.currentState?.openEndDrawer();
-                            }
-                          },
-                        ),
-                      ),
                     if (wide)
                       IconButton(
                         tooltip: '查看作者',
@@ -1056,8 +1077,9 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
                             child: _buildFeedContent(
                                 _feedController.feedState.value))
                         : _buildFeedContent(_feedController.feedState.value),
-                    _buildPinWidget(context),
-                    _buildFeedReply(_feedController.loadingState.value),
+                    if (!commentsInPane) _buildPinWidget(context),
+                    if (!commentsInPane)
+                      _buildFeedReply(_feedController.loadingState.value),
                   ],
                 ),
               )

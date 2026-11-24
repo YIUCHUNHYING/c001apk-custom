@@ -41,6 +41,9 @@ class AdaptiveReadingPaneState extends State<AdaptiveReadingPane> {
   bool _disposing = false;
   bool _canSplit = false;
   bool _sidebarVisible = true;
+  // 当前在右侧展开评论的详情 id（null 表示右侧显示信息流）。
+  String? _commentsId;
+  WidgetBuilder? _commentsBuilder;
   final _trail = <String>[];
   final _details = <String, Widget>{};
   final _detailKeys = <String, GlobalKey>{};
@@ -134,7 +137,16 @@ class AdaptiveReadingPaneState extends State<AdaptiveReadingPane> {
         _detailKeys.removeWhere((id, _) => !_trail.contains(id));
         _savedOffsets.removeWhere((id, _) => !_trail.contains(id));
         _supplements.removeWhere((id, _) => !_trail.contains(id));
+        _clearCommentsIfGone();
       });
+    }
+  }
+
+  /// 若评论所属的详情已不在浏览记录中，收起右侧评论面板。
+  void _clearCommentsIfGone() {
+    if (_commentsId != null && !_trail.contains(_commentsId)) {
+      _commentsId = null;
+      _commentsBuilder = null;
     }
   }
 
@@ -181,6 +193,11 @@ class AdaptiveReadingPaneState extends State<AdaptiveReadingPane> {
       _detailKeys.removeWhere((id, _) => !_trail.contains(id));
       _savedOffsets.removeWhere((id, _) => !_trail.contains(id));
       _supplements.removeWhere((id, _) => !_trail.contains(id));
+      // 打开另一条详情时收起上一条的评论面板。
+      if (_commentsId != id) {
+        _commentsId = null;
+        _commentsBuilder = null;
+      }
       _ensureDetail(id);
     });
     _ensureHistory();
@@ -203,6 +220,8 @@ class AdaptiveReadingPaneState extends State<AdaptiveReadingPane> {
       _detailKeys.clear();
       _savedOffsets.clear();
       _supplements.clear();
+      _commentsId = null;
+      _commentsBuilder = null;
     });
   }
 
@@ -249,16 +268,31 @@ class AdaptiveReadingPaneState extends State<AdaptiveReadingPane> {
         final sidebarFits = width >= 720 * scale &&
             sidebarWidth >= 260 &&
             constraints.maxHeight >= 320 * scale;
-        final showSidebar = reading && sidebarFits && _sidebarVisible;
+        // 评论面板与信息流共用右侧栏，二者互斥：评论展开时收起信息流。
+        final showComments = reading &&
+            sidebarFits &&
+            _commentsId == _selectedId &&
+            _commentsBuilder != null;
+        final showSidebar =
+            reading && sidebarFits && _sidebarVisible && !showComments;
         final supplement = _supplements[_selectedId];
         final supplementHeight = supplement == null ? 0.0 : 96.0 * scale;
         final sidebarHeaderHeight = 72.0 * scale;
         // LocalHistoryEntry alone does not notify Flutter 3.24's native back
         // bridge. PopScope keeps Android back inside the app while reading.
+        // 评论面板展开时，返回键优先收起评论，再关闭详情。
         return PopScope(
             canPop: _selectedId == null,
             onPopInvokedWithResult: (didPop, _) {
-              if (!didPop) close();
+              if (didPop) return;
+              if (showComments) {
+                setState(() {
+                  _commentsId = null;
+                  _commentsBuilder = null;
+                });
+              } else {
+                close();
+              }
             },
             child: ColoredBox(
                 color: Theme.of(context).colorScheme.surfaceContainerLow,
@@ -328,7 +362,55 @@ class AdaptiveReadingPaneState extends State<AdaptiveReadingPane> {
                                                       }
                                                       return true;
                                                     },
-                                                    child: entry.value)))),
+                                                    child: NotificationListener<
+                                                            ReadingCommentsOpen>(
+                                                        onNotification:
+                                                            (notice) {
+                                                          if (_commentsId ==
+                                                                  notice.id &&
+                                                              _commentsBuilder !=
+                                                                  null) {
+                                                            return true;
+                                                          }
+                                                          if (_trail.contains(
+                                                              notice.id)) {
+                                                            setState(() {
+                                                              _commentsId =
+                                                                  notice.id;
+                                                              _commentsBuilder =
+                                                                  notice
+                                                                      .builder;
+                                                              _sidebarVisible =
+                                                                  true;
+                                                            });
+                                                          }
+                                                          return true;
+                                                        },
+                                                        child:
+                                                            NotificationListener<
+                                                                    ReadingCommentsClose>(
+                                                                onNotification:
+                                                                    (notice) {
+                                                                  if (_commentsId ==
+                                                                      notice.id) {
+                                                                    setState(() {
+                                                                      _commentsId =
+                                                                          null;
+                                                                      _commentsBuilder =
+                                                                          null;
+                                                                    });
+                                                                  }
+                                                                  return true;
+                                                                },
+                                                                child:
+                                                                    ReadingCommentsScope(
+                                                                  active:
+                                                                      showComments &&
+                                                                          entry.key ==
+                                                                              _selectedId,
+                                                                  child: entry
+                                                                      .value,
+                                                                 ))))))),
                                   ))))),
                     ),
                   if (showSidebar)
@@ -371,7 +453,7 @@ class AdaptiveReadingPaneState extends State<AdaptiveReadingPane> {
                             icon: const Icon(Icons.chevron_right),
                           ),
                         ])),
-                  if (reading && sidebarFits && !_sidebarVisible)
+                  if (reading && sidebarFits && !_sidebarVisible && !showComments)
                     Positioned(
                       top: 8,
                       right: 16,
@@ -379,6 +461,55 @@ class AdaptiveReadingPaneState extends State<AdaptiveReadingPane> {
                         tooltip: '显示信息流',
                         onPressed: () => setState(() => _sidebarVisible = true),
                         icon: const Icon(Icons.view_sidebar_outlined),
+                      ),
+                    ),
+                  // 右侧评论面板：占据整个右侧栏，覆盖信息流。面板内容由详情页
+                  // 通过 ReadingCommentsOpen 提供，共享同一批评论状态与回调。
+                  if (showComments)
+                    Positioned(
+                      top: 0,
+                      bottom: 0,
+                      left: sidebarLeft,
+                      width: sidebarWidth,
+                      child: NotificationListener<ReadingCommentsClose>(
+                        onNotification: (notice) {
+                          if (_commentsId == notice.id) {
+                            setState(() {
+                              _commentsId = null;
+                              _commentsBuilder = null;
+                            });
+                          }
+                          return true;
+                        },
+                        child: Material(
+                          color: Theme.of(context).colorScheme.surface,
+                          shape: Border(
+                            left: BorderSide(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .outlineVariant
+                                  .withValues(alpha: .5),
+                            ),
+                          ),
+                          child: ClipRect(
+                            // 从右侧滑入并淡入，给出「弹出」手感；ClipRect 将
+                            // 位移动画约束在右侧栏内，不会溢出到正文区域。
+                            child: TweenAnimationBuilder<double>(
+                              tween: Tween<double>(begin: 1, end: 0),
+                              duration: const Duration(milliseconds: 240),
+                              curve: Curves.easeOutCubic,
+                              builder: (context, value, child) =>
+                                  Transform.translate(
+                                offset: Offset(sidebarWidth * value, 0),
+                                child: Opacity(
+                                  opacity: 1 - value,
+                                  child: child,
+                                ),
+                              ),
+                              child: _commentsBuilder!(context),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                 ])));

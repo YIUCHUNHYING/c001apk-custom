@@ -386,7 +386,7 @@ class FeedReplyCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      '查看更多回复 (${data.replynum})',
+                      '查看更多回复(${data.replynum})',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.bold,

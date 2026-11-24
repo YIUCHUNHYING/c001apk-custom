@@ -374,6 +374,11 @@ class GStorage {
     return settings.get(SettingsBoxKey.foldCoinReplies, defaultValue: false);
   }
 
+  /// 大屏阅读时评论是否在右侧分栏展示（默认开启）。
+  static bool get commentsInSidePane {
+    return settings.get(SettingsBoxKey.commentsInSidePane, defaultValue: true);
+  }
+
   static bool get checkUpdate {
     return settings.get(SettingsBoxKey.checkUpdate, defaultValue: true);
   }
@@ -574,6 +579,7 @@ class SettingsBoxKey {
       recordHistory = 'recordHistory',
       showEmoji = 'showEmoji',
       foldCoinReplies = 'foldCoinReplies',
+      commentsInSidePane = 'commentsInSidePane',
       checkUpdate = 'checkUpdate',
       checkCount = 'checkCount',
       installTime = 'installTime',

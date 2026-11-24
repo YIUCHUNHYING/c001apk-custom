@@ -246,6 +246,12 @@ class AdaptiveReadingPaneState extends State<AdaptiveReadingPane> {
         _canSplit = widget.mode != ReadingMode.disabled &&
             width >= minimumWidth * scale;
         final reading = _selectedId != null;
+        // 评论面板正在展开（含尚未布局、仅状态就绪的情况）。评论比信息流更
+        // 窄也能舒适阅读，因此用它自己的判定，不套用信息流的 260px 门槛。
+        final commentsReady = reading &&
+            _commentsId == _selectedId &&
+            _commentsBuilder != null &&
+            constraints.maxHeight >= 320 * scale;
         var detailWidth = width < 720 * scale
             ? width
             : (700.0 * scale).clamp(680.0, 760.0).clamp(0.0, width);
@@ -257,22 +263,26 @@ class AdaptiveReadingPaneState extends State<AdaptiveReadingPane> {
         // right even though both panes fit across the available width.
         // Preserve centered reading on larger windows; otherwise use the left
         // margin first, then shorten the article only as much as necessary.
+        // 评论模式下把预留宽度降到 224，让中等宽度平板也能显示评论面板。
+        final reserveForSide = commentsReady ? 224.0 : 280.0;
         if (_canSplit &&
             constraints.maxHeight >= 320 * scale &&
-            width - detailLeft - detailWidth - 20 < 260) {
-          detailWidth = detailWidth.clamp(0.0, width - 280);
-          detailLeft = (width - detailWidth - 280).clamp(0.0, detailLeft);
+            width - detailLeft - detailWidth - 20 < reserveForSide) {
+          detailWidth = detailWidth.clamp(0.0, width - reserveForSide);
+          detailLeft =
+              (width - detailWidth - reserveForSide).clamp(0.0, detailLeft);
         }
         final sidebarLeft = detailLeft + detailWidth + 12;
         final sidebarWidth = (width - sidebarLeft - 8).clamp(0.0, 300.0);
         final sidebarFits = width >= 720 * scale &&
             sidebarWidth >= 260 &&
             constraints.maxHeight >= 320 * scale;
+        // 评论面板的门槛更宽松：只要能分栏且右侧有 200px 以上即可展示。
+        final commentsFits = width >= 600 * scale &&
+            sidebarWidth >= 200 &&
+            constraints.maxHeight >= 320 * scale;
         // 评论面板与信息流共用右侧栏，二者互斥：评论展开时收起信息流。
-        final showComments = reading &&
-            sidebarFits &&
-            _commentsId == _selectedId &&
-            _commentsBuilder != null;
+        final showComments = commentsReady && commentsFits;
         final showSidebar =
             reading && sidebarFits && _sidebarVisible && !showComments;
         final supplement = _supplements[_selectedId];

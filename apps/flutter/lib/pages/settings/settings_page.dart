@@ -329,6 +329,13 @@ class _SettingsDetailPageState extends State<SettingsDetailPage> {
                 boxKey: SettingsBoxKey.foldCoinReplies,
                 defaultValue: false,
               ),
+              SwitchItem(
+                icon: Icons.view_sidebar_outlined,
+                title: '评论右侧展示',
+                subtitle: '大屏阅读时点开评论即在右侧弹出，不再挤在正文底部',
+                boxKey: SettingsBoxKey.commentsInSidePane,
+                defaultValue: true,
+              ),
             ]),
           ],
         SettingsSection.media => [

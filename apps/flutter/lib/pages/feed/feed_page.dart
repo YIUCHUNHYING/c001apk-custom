@@ -76,6 +76,7 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
   final _titleVisible = ValueNotifier<bool>(false);
   bool _showSource = false;
   Datum? _supplementData;
+  bool _autoOpenCommentsDone = false;
 
   void _updateSupplement(BuildContext context) {
     final state = _feedController.feedState.value;
@@ -423,6 +424,22 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
     ).dispatch(context);
   }
 
+  /// 设置开启时，评论数据首次就绪后自动在右侧弹出一次。
+  void _autoOpenComments(BuildContext context) {
+    if (_autoOpenCommentsDone ||
+        !GStorage.commentsInSidePane ||
+        !ReadingCommentsScope.inPaneOf(context) ||
+        ReadingCommentsScope.activeOf(context)) {
+      return;
+    }
+    final replyState = _feedController.loadingState.value;
+    if (replyState is! Success) return;
+    _autoOpenCommentsDone = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && context.mounted) _openCommentsInPane(context);
+    });
+  }
+
   Widget _buildPinWidget(BuildContext context) {
     if (ReadingPresentation.of(context)) {
       return SliverPinnedBoxAdapter(
@@ -432,15 +449,28 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(children: [
               Expanded(
-                  child: Text('评论 · ${_feedController.replyNum}',
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.w700))),
+                child: (ReadingCommentsScope.inPaneOf(context) &&
+                        GStorage.commentsInSidePane)
+                    ? InkWell(
+                        borderRadius: BorderRadius.circular(6),
+                        onTap: () => _openCommentsInPane(context),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('评论 · ${_feedController.replyNum}',
+                                style: const TextStyle(
+                                    fontSize: 18, fontWeight: FontWeight.w700)),
+                            const SizedBox(width: 6),
+                            const Icon(Icons.chevron_right,
+                                size: 18, color: Colors.grey),
+                          ],
+                        ),
+                      )
+                    : Text('评论 · ${_feedController.replyNum}',
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w700)),
+              ),
               _buildSortMenu('评论排序'),
-              if (ReadingCommentsScope.inPaneOf(context))
-                IconButton(
-                    tooltip: '在右侧查看评论',
-                    icon: const Icon(Icons.view_sidebar_outlined),
-                    onPressed: () => _openCommentsInPane(context)),
               if (GlobalData().isLogin)
                 IconButton(
                     tooltip: '回复',
@@ -856,6 +886,7 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
     // 评论已移到右侧面板时，正文只保留内容，避免同一批评论重复出现。
     final commentsInPane = ReadingCommentsScope.activeOf(context);
     _updateSupplement(context);
+    _autoOpenComments(context);
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       floatingActionButton: Obx(

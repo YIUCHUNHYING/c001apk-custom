@@ -33,7 +33,7 @@ class FeedCommentSideSheet extends StatefulWidget {
   final VoidCallback onClose;
   final void Function(ReplyType type, dynamic id, dynamic uname, dynamic fid)
       onReply;
-  final void Function(Datum reply) onToggleReplyTop;
+  final Future<void> Function(Datum reply)? onToggleReplyTop;
   final void Function(dynamic uid, dynamic fid) onBlockReply;
   final void Function(dynamic id, dynamic fid, {bool isReply})
       postLikeDeleteFollow;
@@ -236,7 +236,10 @@ class _FeedCommentSideSheetState extends State<FeedCommentSideSheet> {
         return _buildError(context, state);
       case Success():
         return _buildSuccessList(context, state);
+      default:
+        return const SizedBox();
     }
+    return const SizedBox();
   }
 
   Widget _buildSuccessList(BuildContext context, Success state) {

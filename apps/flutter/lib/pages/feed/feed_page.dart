@@ -846,54 +846,55 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
   /// [docked] 为 true 表示挂在分栏容器右侧栏，否则是独立路由 body 内嵌分栏。
   Widget _buildCommentsPane(BuildContext context, {bool docked = false}) {
     final colors = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Material(
-          color: colors.surface,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(children: [
-              Expanded(
-                child: Obx(() => Text('评论 · ${_feedController.replyNum}',
-                    style: const TextStyle(
-                        fontSize: 17, fontWeight: FontWeight.w700))),
-              ),
-              // 面板内使用不同 tooltip，保证 '评论排序' 只命中正文标题栏。
-              _buildSortMenu('评论排序方式'),
-              if (GlobalData().isLogin)
-                IconButton(
-                    tooltip: '回复',
-                    icon: const Icon(Icons.edit_outlined),
-                    onPressed: () => _onReply(
-                        ReplyType.feed,
-                        _feedController.id,
-                        _feedController.feedUsername,
-                        null)),
-              IconButton(
-                  tooltip: '收起评论',
-                  icon: const Icon(Icons.chevron_right),
-                  onPressed: () =>
-                      _closeCommentsPane(context, docked: docked)),
-            ]),
+    // 用单一 CustomScrollView 承载「标题栏 + 评论列表」，避免 Column+Expanded
+    // 在父级约束不满足（高度 unbounded）时抛 RenderFlex 异常、整块渲染成
+    // release 灰色 ErrorWidget 的问题。Obx 提到最外层，标题栏与列表都响应式。
+    return Obx(() => CustomScrollView(
+          key: PageStorageKey('feed-comments:$_id'),
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
           ),
-        ),
-        Divider(height: 1, color: colors.outlineVariant.withValues(alpha: .5)),
-        // 用 Obx 包住整段滚动视图，评论加载状态一变化就整体重建，
-        // 避免把 Obx 直接塞进 slivers 造成 sliver 代理不渲染的空白问题。
-        Expanded(
-          child: Obx(() => CustomScrollView(
-            key: PageStorageKey('feed-comments:$_id'),
-            physics: const AlwaysScrollableScrollPhysics(
-              parent: BouncingScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(
+              child: Material(
+                color: colors.surface,
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(children: [
+                    Expanded(
+                      child: Text('评论 · ${_feedController.replyNum}',
+                          style: const TextStyle(
+                              fontSize: 17, fontWeight: FontWeight.w700)),
+                    ),
+                    // 面板内使用不同 tooltip，保证 '评论排序' 只命中正文标题栏。
+                    _buildSortMenu('评论排序方式'),
+                    if (GlobalData().isLogin)
+                      IconButton(
+                          tooltip: '回复',
+                          icon: const Icon(Icons.edit_outlined),
+                          onPressed: () => _onReply(
+                              ReplyType.feed,
+                              _feedController.id,
+                              _feedController.feedUsername,
+                              null)),
+                    IconButton(
+                        tooltip: '收起评论',
+                        icon: const Icon(Icons.chevron_right),
+                        onPressed: () =>
+                            _closeCommentsPane(context, docked: docked)),
+                  ]),
+                ),
+              ),
             ),
-            slivers: [
-              _buildFeedReply(_feedController.loadingState.value),
-            ],
-          )),
-        ),
-      ],
-    );
+            SliverToBoxAdapter(
+              child: Divider(
+                  height: 1,
+                  color: colors.outlineVariant.withValues(alpha: .5)),
+            ),
+            _buildFeedReply(_feedController.loadingState.value),
+          ],
+        ));
   }
 
   @override
@@ -1204,16 +1205,15 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
       }
       if (sideBySide) {
         final colors = Theme.of(context).colorScheme;
-        final totalWidth = MediaQuery.sizeOf(context).width;
-        final commentsWidth = (totalWidth * 0.40).clamp(320.0, 480.0).toDouble();
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
+              flex: 3,
               child: _buildArticleView(context, wide: wide, withComments: false),
             ),
-            SizedBox(
-              width: commentsWidth,
+            Expanded(
+              flex: 2,
               child: Container(
                 decoration: BoxDecoration(
                   border: Border(

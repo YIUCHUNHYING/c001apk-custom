@@ -74,6 +74,7 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
   late bool _isFabVisible = true;
   late final _scrollController = ScrollController();
   final _titleVisible = ValueNotifier<bool>(false);
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _showSource = false;
   Datum? _supplementData;
   bool _autoOpenCommentsDone = false;
@@ -416,19 +417,30 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
         ),
       ));
 
-  /// 宽屏下把评论从正文抽到右侧栏的入口。仅在可弹出的分栏阅读中可用。
+  /// 当前是否允许把评论放到右侧：设置开启，且屏幕够宽（平板/桌面）。
+  /// 分栏容器和独立路由都用它，避免小平板因不进入分栏而丢失入口。
+  bool _canUseSideComments(BuildContext context) {
+    if (!GStorage.commentsInSidePane) return false;
+    final size = MediaQuery.sizeOf(context);
+    return size.shortestSide >= 600 || size.width >= 720;
+  }
+
+  /// 打开右侧评论：分栏容器走通知；独立路由走 Scaffold.endDrawer。
   void _openCommentsInPane(BuildContext context) {
-    ReadingCommentsOpen(
-      _id,
-      (paneContext) => _buildCommentsPane(paneContext),
-    ).dispatch(context);
+    if (ReadingCommentsScope.inPaneOf(context)) {
+      ReadingCommentsOpen(
+        _id,
+        (paneContext) => _buildCommentsPane(paneContext),
+      ).dispatch(context);
+    } else {
+      _scaffoldKey.currentState?.openEndDrawer();
+    }
   }
 
   /// 设置开启时，评论数据首次就绪后自动在右侧弹出一次。
   void _autoOpenComments(BuildContext context) {
     if (_autoOpenCommentsDone ||
-        !GStorage.commentsInSidePane ||
-        !ReadingCommentsScope.inPaneOf(context) ||
+        !_canUseSideComments(context) ||
         ReadingCommentsScope.activeOf(context)) {
       return;
     }
@@ -449,8 +461,7 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(children: [
               Expanded(
-                child: (ReadingCommentsScope.inPaneOf(context) &&
-                        GStorage.commentsInSidePane)
+                child: _canUseSideComments(context)
                     ? InkWell(
                         borderRadius: BorderRadius.circular(6),
                         onTap: () => _openCommentsInPane(context),
@@ -499,8 +510,27 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
                   const SizedBox(width: 16),
                   Expanded(
                     flex: 1,
-                    child: Text('共 ${_feedController.replyNum} 回复'),
+                    child: _canUseSideComments(context)
+                        ? InkWell(
+                            onTap: () => _openCommentsInPane(context),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text('共 ${_feedController.replyNum} 回复'),
+                                const SizedBox(width: 4),
+                                const Icon(Icons.chevron_right,
+                                    size: 16, color: Colors.grey),
+                              ],
+                            ),
+                          )
+                        : Text('共 ${_feedController.replyNum} 回复'),
                   ),
+                  if (_canUseSideComments(context))
+                    IconButton(
+                      tooltip: '在右侧查看评论',
+                      icon: const Icon(Icons.view_sidebar_outlined, size: 20),
+                      onPressed: () => _openCommentsInPane(context),
+                    ),
                   Obx(
                     () => SegmentedButton<ReplySortType>(
                       style: TextButton.styleFrom(
@@ -829,8 +859,14 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
               IconButton(
                   tooltip: '收起评论',
                   icon: const Icon(Icons.chevron_right),
-                  onPressed: () =>
-                      ReadingCommentsClose(_id).dispatch(context)),
+                  onPressed: () {
+                    // 分栏容器走通知收起；独立路由的 endDrawer 直接 pop。
+                    final consumed =
+                        ReadingCommentsClose(_id).dispatch(context);
+                    if (!consumed && Navigator.of(context).canPop()) {
+                      Navigator.of(context).pop();
+                    }
+                  }),
             ]),
           ),
         ),
@@ -887,8 +923,22 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
     final commentsInPane = ReadingCommentsScope.activeOf(context);
     _updateSupplement(context);
     _autoOpenComments(context);
+    // 独立路由（如小平板不进入分栏时）用 endDrawer 从右侧弹出评论；
+    // 分栏容器已有自己的右侧评论栏，不再重复提供。
+    final standaloneComments = !ReadingCommentsScope.inPaneOf(context) &&
+        _canUseSideComments(context);
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: Theme.of(context).colorScheme.surface,
+      endDrawerEnableOpenDragGesture: standaloneComments,
+      endDrawer: standaloneComments
+          ? Drawer(
+              width: (MediaQuery.sizeOf(context).width * 0.42)
+                  .clamp(300.0, 460.0)
+                  .toDouble(),
+              child: _buildCommentsPane(context),
+            )
+          : null,
       floatingActionButton: Obx(
         () => _feedController.feedState.value is Success &&
                 !wide &&

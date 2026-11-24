@@ -861,9 +861,9 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
                   icon: const Icon(Icons.chevron_right),
                   onPressed: () {
                     // 分栏容器走通知收起；独立路由的 endDrawer 直接 pop。
-                    final consumed =
-                        ReadingCommentsClose(_id).dispatch(context);
-                    if (!consumed && Navigator.of(context).canPop()) {
+                    if (ReadingCommentsScope.inPaneOf(context)) {
+                      ReadingCommentsClose(_id).dispatch(context);
+                    } else if (Navigator.of(context).canPop()) {
                       Navigator.of(context).pop();
                     }
                   }),

@@ -28,11 +28,11 @@ class ImageTextScrollCard extends StatelessWidget {
         builder: (BuildContext context, BoxConstraints constraints) {
       final width = constraints.maxWidth / 3 * 2;
       final imageHeight = width / 2.22;
-      final scale =
-          MediaQuery.textScalerOf(context).scale(_fontSize) / _fontSize;
-      final cardHeight = imageHeight +
-          _verticalPadding * 2 +
-          _fontSize * _titleLineHeight * 2 * scale;
+      // 两行标题的排版高度 + 少量余量，避免不同字体的行高取整后溢出。
+      final textHeight = MediaQuery.textScalerOf(context).scale(_fontSize) *
+          _titleLineHeight *
+          2;
+      final cardHeight = imageHeight + _verticalPadding * 2 + textHeight + 4;
       return Column(
         children: [
           if (!data.title.isNullOrEmpty)

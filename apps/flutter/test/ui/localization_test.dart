@@ -1070,6 +1070,11 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     Request.dio.httpClientAdapter = EmptyGuestAdapter()..showUser = true;
     GlobalData().isLogin = false;
+    // 本用例验证原始自适应多列布局，显式关闭小红书网格，结束后恢复默认。
+    await tester.runAsync(
+        () => GStorage.settings.put(SettingsBoxKey.xhsGridLayout, false));
+    addTearDown(
+        () => GStorage.settings.delete(SettingsBoxKey.xhsGridLayout));
     await tester.pumpWidget(const C001APKAPP());
     await tester.pumpAndSettle();
     Get.toNamed('/u/10');

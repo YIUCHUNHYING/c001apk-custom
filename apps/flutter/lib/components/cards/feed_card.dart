@@ -135,9 +135,8 @@ class FeedCard extends StatelessWidget {
     }
   }
 
-  /// 小红书式封面卡：大图在上，标题/正文与作者、点赞在下。
-  /// 只挑一张主图当封面，跳过热评、外链、关联行等重内容，
-  /// 也顺带降低了网格滚动时的构建与解码开销。
+  /// 小红书式封面卡：大图在上，标题/正文、话题、最热评论与作者数据在下。
+  /// 外链、关联行、多图九宫格等仍在详情页展示，卡片只保留一眼能看全的信息。
   Widget _buildCoverCard(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final pictures = data.picArr ?? const <String>[];
@@ -203,6 +202,15 @@ class FeedCard extends StatelessWidget {
                           ),
                         ),
                       ),
+                    if (_hasTopicRows) ...[
+                      SizedBox(height: dense ? 6 : 8),
+                      _coverTopics(context,
+                          maxWidth: constraints.maxWidth - pad * 2),
+                    ],
+                    if (!data.replyRows.isNullOrEmpty) ...[
+                      SizedBox(height: dense ? 6 : 8),
+                      _coverHotReply(context),
+                    ],
                     SizedBox(height: dense ? 6 : 8),
                     _coverFooter(context, dense: dense),
                   ],
@@ -258,40 +266,151 @@ class FeedCard extends StatelessWidget {
     );
   }
 
+  bool get _hasTopicRows =>
+      data.targetRow != null || !data.relationRows.isNullOrEmpty;
+
+  /// 保留原版卡片上的话题/关联入口，点一下就能进对应话题页。
+  Widget _coverTopics(BuildContext context, {required double maxWidth}) {
+    final rows = <Datum>[
+      if (data.targetRow != null) data.targetRow!,
+      ...?data.relationRows,
+    ];
+    return Wrap(
+      spacing: 6,
+      runSpacing: 5,
+      children: [
+        for (final row in rows.take(4))
+          _topicChip(context, row, maxWidth: maxWidth),
+      ],
+    );
+  }
+
+  Widget _topicChip(BuildContext context, Datum row,
+      {required double maxWidth}) {
+    final colors = Theme.of(context).colorScheme;
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      child: Material(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () =>
+              Utils.onOpenLink(row.url.orEmpty, row.title, true, context),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              if (!row.logo.isNullOrEmpty) ...[
+                clipNetworkImage(
+                  row.logo!,
+                  width: 14,
+                  height: 14,
+                  radius: 3,
+                  memCacheWidth:
+                      (14 * MediaQuery.devicePixelRatioOf(context)).round(),
+                ),
+                const SizedBox(width: 4),
+              ],
+              Flexible(
+                child: Text(
+                  row.title.orEmpty,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 11.5, color: colors.onSurfaceVariant),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 保留原版卡片里的「最热评论」，压成两行，点一下进详情。
+  Widget _coverHotReply(BuildContext context) {
+    final reply = data.replyRows!.first;
+    return ContentFilterGate(
+      data: reply,
+      scope: FilterScope.comment,
+      builder: (context) {
+        final colors = Theme.of(context).colorScheme;
+        return GestureDetector(
+          onTap: () => _onViewFeed(context),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: colors.surface.withValues(alpha: .78),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: ContentFilterText(
+              source: reply.message ?? '',
+              builder: (message) => Text(
+                '${reply.userInfo?.username ?? ''}：'
+                '${Utils.parseHtmlString(MarkdownContent.parse(message).preview)}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.4,
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _coverFooter(BuildContext context, {required bool dense}) {
     final colors = Theme.of(context).colorScheme;
     final size = dense ? 18.0 : 20.0;
-    return Row(children: [
-      clipNetworkImage(
-        data.userAvatar.orEmpty,
-        radius: 50,
-        width: size,
-        height: size,
-        isAvatar: true,
-        memCacheWidth: (size * MediaQuery.devicePixelRatioOf(context))
-            .round()
-            .clamp(1, 4096)
-            .toInt(),
-      ),
-      SizedBox(width: dense ? 5 : 6),
-      Expanded(
-        child: Text(
-          data.userInfo?.username ?? '',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(fontSize: dense ? 11 : 12, color: colors.outline),
-        ),
-      ),
-      if (data.likenum != null) ...[
-        Icon(Icons.thumb_up_alt_outlined,
-            size: dense ? 12 : 14, color: colors.outline),
-        const SizedBox(width: 3),
-        Text(
-          '${data.likenum}',
-          style: TextStyle(fontSize: dense ? 11 : 12, color: colors.outline),
-        ),
+    final iconSize = dense ? 12.0 : 14.0;
+    final textStyle =
+        TextStyle(fontSize: dense ? 11 : 12, color: colors.outline);
+    Widget stat(IconData icon, String text) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: iconSize, color: colors.outline),
+            const SizedBox(width: 3),
+            Text(text, style: textStyle),
+          ],
+        );
+    // 用 Wrap 收尾：窄卡片上昵称会先省略，点赞/评论数换到下一行，不会溢出。
+    return Wrap(
+      spacing: dense ? 6 : 8,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          clipNetworkImage(
+            data.userAvatar.orEmpty,
+            radius: 50,
+            width: size,
+            height: size,
+            isAvatar: true,
+            memCacheWidth:
+                (size * MediaQuery.devicePixelRatioOf(context)).round(),
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              data.userInfo?.username ?? '',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textStyle,
+            ),
+          ),
+        ]),
+        if (data.likenum != null)
+          stat(Icons.thumb_up_alt_outlined, '${data.likenum}'),
+        // 保留总评论数，和原版卡片一致。
+        if (data.replynum != null)
+          stat(Icons.message_outlined, '${data.replynum}'),
       ],
-    ]);
+    );
   }
 
   Widget _summary(BuildContext context) {

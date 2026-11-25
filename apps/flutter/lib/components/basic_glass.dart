@@ -210,7 +210,14 @@ class LiquidNavigationBar extends StatefulWidget {
 
 class _BasicNavigationState extends State<LiquidNavigationBar> {
   int? _dragIndex;
+  bool _pressed = false;
   bool get _vertical => widget.direction == Axis.vertical;
+
+  // 只有「完全」档需要按住时的边缘微光，其它档位不必重建。
+  void _setPressed(bool value) {
+    if (widget.level != LiquidGlassLevel.complete || _pressed == value) return;
+    setState(() => _pressed = value);
+  }
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -240,8 +247,19 @@ class _BasicNavigationState extends State<LiquidNavigationBar> {
                 final radius =
                     BorderRadius.circular(_vertical ? 28 : height / 2);
                 final glass = widget.refract &&
-                    widget.level != LiquidGlassLevel.low &&
+                    widget.level.usesBackdrop &&
                     !MediaQuery.highContrastOf(context);
+                // 档位光学参数：低档不模糊、中档柔光、高档更通透、
+                // 「完全」平时无描边、按住时边缘微光。
+                final (blurSigma, tintAlpha, borderAlpha) = !glass
+                    ? (0.0, 1.0, .45)
+                    : switch (widget.level) {
+                        LiquidGlassLevel.low => (0.0, 1.0, .45),
+                        LiquidGlassLevel.medium => (8.0, .90, .45),
+                        LiquidGlassLevel.high => (18.0, .78, .55),
+                        LiquidGlassLevel.complete =>
+                          (24.0, .70, _pressed ? .65 : 0.0),
+                      };
                 final selected = (_dragIndex ?? widget.selectedIndex)
                     .clamp(0, widget.labels.length - 1);
                 void drag(Offset point) => setState(() => _dragIndex =
@@ -308,20 +326,19 @@ class _BasicNavigationState extends State<LiquidNavigationBar> {
                           child: SizedBox(
                               height: _vertical ? length : height,
                               child: Stack(children: [
-                                // 胶囊底色：高不透明度 + 柔和模糊，避免下方内容
-                                // 透出在边缘形成明显断层；底下垫一层柔和阴影让
-                                // 胶囊真正"浮"起来。
+                                // 胶囊底色：模糊强度与通透度跟随「液态玻璃档位」。
                                 Positioned.fill(
                                     child: IgnorePointer(
                                         child: ClipRRect(
                                   borderRadius: radius,
-                                  child: glass
+                                  child: blurSigma > 0
                                       ? BackdropFilter(
                                           filter: ui.ImageFilter.blur(
-                                              sigmaX: 14, sigmaY: 14),
+                                              sigmaX: blurSigma,
+                                              sigmaY: blurSigma),
                                           child: ColoredBox(
                                             color: colors.surface
-                                                .withValues(alpha: .95),
+                                                .withValues(alpha: tintAlpha),
                                             child: const SizedBox.expand(),
                                           ),
                                         )
@@ -338,7 +355,7 @@ class _BasicNavigationState extends State<LiquidNavigationBar> {
                                     borderRadius: radius,
                                     border: Border.all(
                                       color: colors.outlineVariant
-                                          .withValues(alpha: .45),
+                                          .withValues(alpha: borderAlpha),
                                       width: .6,
                                     ),
                                   ),
@@ -359,6 +376,13 @@ class _BasicNavigationState extends State<LiquidNavigationBar> {
                                               child: GestureDetector(
                                                 behavior:
                                                     HitTestBehavior.opaque,
+                                                // 「完全」档：按住时边缘微光。
+                                                onTapDown: (_) =>
+                                                    _setPressed(true),
+                                                onTapUp: (_) =>
+                                                    _setPressed(false),
+                                                onTapCancel: () =>
+                                                    _setPressed(false),
                                                 onTap: () => widget
                                                     .onDestinationSelected(i),
                                                 // 选中底色用一个铺满整个 tab 的

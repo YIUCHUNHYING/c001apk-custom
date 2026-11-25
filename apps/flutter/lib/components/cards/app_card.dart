@@ -98,61 +98,50 @@ class AppCard extends StatelessWidget {
                                 : data.userInfo?.username != null
                                     ? data.userInfo!.username.toString()
                                     : data.fUserInfo!.username.toString(),
-                    maxLines: 1,
+                    // 窄卡片允许标题折成两行，避免话题名被截得看不出是什么。
+                    maxLines: constraints.maxWidth < 260 ? 2 : 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  // 宽度不够时让「热度 / 讨论」自动换到第二行，而不是被裁掉，
+                  // 保证具体数值始终可读。
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 2,
                     children: [
-                      Flexible(
-                        child: Text(
-                          appCardType == AppCardType.APP
-                              ? '${data.commentnum}讨论'
-                              : [AppCardType.PRODUCT, AppCardType.TOPIC]
-                                      .contains(appCardType)
-                                  ? '${data.hotNumTxt}热度'
-                                  : appCardType == AppCardType.USER
-                                      ? '${data.follow}关注'
-                                      : appCardType == AppCardType.CONTACTS
-                                          ? '${data.userInfo?.follow ?? data.fUserInfo?.follow}关注'
-                                          : '${data.followNum}关注',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      Text(
+                        appCardType == AppCardType.APP
+                            ? '${data.commentnum}讨论'
+                            : [AppCardType.PRODUCT, AppCardType.TOPIC]
+                                    .contains(appCardType)
+                                ? '${data.hotNumTxt}热度'
+                                : appCardType == AppCardType.USER
+                                    ? '${data.follow}关注'
+                                    : appCardType == AppCardType.CONTACTS
+                                        ? '${data.userInfo?.follow ?? data.fUserInfo?.follow}关注'
+                                        : '${data.followNum}关注',
+                        style: statStyle,
+                      ),
+                      Text(
+                        appCardType == AppCardType.APP
+                            ? '${data.downCount}下载'
+                            : appCardType == AppCardType.PRODUCT
+                                ? '${data.feedCommentNumTxt}讨论'
+                                : appCardType == AppCardType.TOPIC
+                                    ? '${data.commentnumTxt}讨论'
+                                    : appCardType == AppCardType.USER
+                                        ? '${data.fans}粉丝'
+                                        : appCardType == AppCardType.CONTACTS
+                                            ? '${data.userInfo?.fans ?? data.fUserInfo?.fans}粉丝'
+                                            : data.targetType == 'user'
+                                                ? '${data.fansNum}粉丝'
+                                                : '${data.commentNum}讨论',
+                        style: statStyle,
+                      ),
+                      if (appCardType == AppCardType.USER)
+                        Text(
+                          '${DateUtil.fromToday(data.logintime)}活跃',
                           style: statStyle,
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Flexible(
-                        child: Text(
-                          appCardType == AppCardType.APP
-                              ? '${data.downCount}下载'
-                              : appCardType == AppCardType.PRODUCT
-                                  ? '${data.feedCommentNumTxt}讨论'
-                                  : appCardType == AppCardType.TOPIC
-                                      ? '${data.commentnumTxt}讨论'
-                                      : appCardType == AppCardType.USER
-                                          ? '${data.fans}粉丝'
-                                          : appCardType == AppCardType.CONTACTS
-                                              ? '${data.userInfo?.fans ?? data.fUserInfo?.fans}粉丝'
-                                              : data.targetType == 'user'
-                                                  ? '${data.fansNum}粉丝'
-                                                  : '${data.commentNum}讨论',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: statStyle,
-                        ),
-                      ),
-                      if (appCardType == AppCardType.USER) ...[
-                        const SizedBox(width: 10),
-                        Flexible(
-                          child: Text(
-                            '${DateUtil.fromToday(data.logintime)}活跃',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: statStyle,
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ],

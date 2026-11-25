@@ -336,6 +336,13 @@ class _SettingsDetailPageState extends State<SettingsDetailPage> {
                 boxKey: SettingsBoxKey.commentsInSidePane,
                 defaultValue: true,
               ),
+              SwitchItem(
+                icon: Icons.grid_view_rounded,
+                title: '小红书网格布局',
+                subtitle: '主页帖子按固定列数铺排，双指捏合可切换每行 2~4 个；关闭则回到原始自适应布局',
+                boxKey: SettingsBoxKey.xhsGridLayout,
+                defaultValue: true,
+              ),
             ]),
           ],
         SettingsSection.media => [

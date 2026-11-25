@@ -160,8 +160,7 @@ void main() {
   testWidgets('Windows glass preferences and width changes preserve the feed',
       (tester) async {
     await mount(tester, platform: TargetPlatform.windows, width: 1280);
-    // 宽屏改用全宽标准底栏。
-    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byType(LiquidNavigationBar), findsOneWidget);
     await tester.drag(find.byType(ListView), const Offset(0, -400));
     await tester.pumpAndSettle();
     final scroll =
@@ -189,9 +188,7 @@ void main() {
     final offset = scroll.pixels;
     await tester.binding.setSurfaceSize(const Size(900, 800));
     await tester.pumpAndSettle();
-    // 宽屏改用全宽标准底栏。
-    expect(find.byType(NavigationBar), findsOneWidget);
-    expect(find.byType(LiquidNavigationBar), findsNothing);
+    expect(find.byType(LiquidNavigationBar), findsOneWidget);
     expect(
         identical(
             tester.state<ScrollableState>(find.byType(Scrollable)).position,

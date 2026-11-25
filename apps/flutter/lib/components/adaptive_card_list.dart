@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:c001apk_flutter/components/masonry_section.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:sliver_tools/sliver_tools.dart';
+
+import '../utils/storage_util.dart';
 
 /// Lazy masonry cards use the shortest column without truncating content.
 /// Structural cards separate masonry sections and span the available width.
@@ -53,6 +56,11 @@ class _AdaptiveCardListState extends State<AdaptiveCardList> {
   double? _cachedWidth;
   double? _cachedScale;
   int? _columns;
+  int? _cachedColumns;
+  double _pinchStartColumns = 3;
+  double _pinchScale = 1;
+  ValueListenable<Box<dynamic>>? _settingsListenable;
+  VoidCallback? _settingsListener;
   int? _anchorIndex;
   double _anchorDy = 0;
   int _attempts = 0;
@@ -157,7 +165,25 @@ class _AdaptiveCardListState extends State<AdaptiveCardList> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    // 设置里切换「小红书网格布局」或列数变化时立即重建列表。
+    try {
+      _settingsListenable = GStorage.settings.listenable(
+        keys: [SettingsBoxKey.xhsGridLayout, SettingsBoxKey.xhsGridColumns],
+      );
+      _settingsListener = () {
+        if (mounted) setState(() {});
+      };
+      _settingsListenable!.addListener(_settingsListener!);
+    } catch (_) {
+      // 未初始化 Hive（如部分测试）时跳过监听，使用原始布局。
+    }
+  }
+
+  @override
   void dispose() {
+    _settingsListenable?.removeListener(_settingsListener!);
     _ownedController.dispose();
     super.dispose();
   }
@@ -248,17 +274,26 @@ class _AdaptiveCardListState extends State<AdaptiveCardList> {
   Widget _buildCards(BuildContext context, double width) {
     final scale =
         (MediaQuery.textScalerOf(context).scale(16) / 16).clamp(1.0, 2.0);
+    // 小红书模式使用固定列数（2~4，双指捏合可调），但同时受可用宽度约束，
+    // 避免窄屏下挤成一团；关闭后回到按宽度自适应的原始布局。
+    final xhs = _xhsEnabled;
+    final maxByWidth =
+        ((width - widget.padding.horizontal + 10) / (180 * scale + 10))
+            .floor()
+            .clamp(1, 4);
+    final columns = xhs
+        ? _xhsColumns.clamp(2, 4).clamp(1, maxByWidth)
+        : ((width - widget.padding.horizontal + 10) / (360 * scale + 10))
+            .floor()
+            .clamp(1, 4);
     // SliverLayoutBuilder also runs on scrolling. Reusing the child avoids
     // rebuilding unchanged delegates and invalidating measured section extents.
     if (_cachedCards != null &&
         _cachedWidth == width &&
-        _cachedScale == scale) {
+        _cachedScale == scale &&
+        _cachedColumns == columns) {
       return _wrapCards(_cachedCards!);
     }
-    final columns =
-        ((width - widget.padding.horizontal + 10) / (360 * scale + 10))
-            .floor()
-            .clamp(1, 4);
     if (_columns != null && _columns != columns) {
       final generation = ++_anchorGeneration;
       if (_anchorIndex == null) _captureAnchor();
@@ -291,15 +326,87 @@ class _AdaptiveCardListState extends State<AdaptiveCardList> {
     _cachedCards = cards;
     _cachedWidth = width;
     _cachedScale = scale;
+    _cachedColumns = columns;
     return _wrapCards(cards);
+  }
+
+  // 双指捏合切换列数。用 Listener 直接监听指针，不参与滚动手势竞技场，
+  // 因此单指滚动完全不受影响。
+  final _pointers = <int, Offset>{};
+  double? _pinchStartDistance;
+  double _pinchStartColumns = 3;
+
+  // 测试环境可能未初始化 Hive，安全读取设置：未就绪时退回原始布局。
+  bool get _xhsEnabled {
+    try {
+      return GStorage.xhsGridLayout;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  int get _xhsColumns {
+    try {
+      return GStorage.xhsGridColumns;
+    } catch (_) {
+      return 3;
+    }
+  }
+
+  double _pinchDistance() {
+    final points = _pointers.values.toList();
+    if (points.length < 2) return 0;
+    return (points[0] - points[1]).distance;
+  }
+
+  void _onPinchDown(PointerDownEvent event) {
+    _pointers[event.pointer] = event.position;
+    if (_pointers.length == 2) {
+      _pinchStartDistance = _pinchDistance();
+      _pinchStartColumns = _xhsColumns.toDouble();
+    }
+  }
+
+  void _onPinchMove(PointerMoveEvent event) {
+    if (!_pointers.containsKey(event.pointer)) return;
+    _pointers[event.pointer] = event.position;
+  }
+
+  void _onPinchUp(PointerEvent event) {
+    if (_pointers.length == 2 && _pinchStartDistance != null) {
+      final distance = _pinchDistance();
+      if (distance > 0 && _pinchStartDistance! > 0) {
+        _applyPinch(distance / _pinchStartDistance!);
+      }
+      _pinchStartDistance = null;
+    }
+    _pointers.remove(event.pointer);
+    if (_pointers.length < 2) _pinchStartDistance = null;
+  }
+
+  void _applyPinch(double ratio) {
+    if (!_xhsEnabled) return;
+    if ((ratio - 1).abs() < .08) return;
+    // 往内捏（ratio<1）列数变多、卡片变小；往外捏（ratio>1）列数变少。
+    final target = (_pinchStartColumns / ratio).round().clamp(2, 4);
+    if (target != _xhsColumns) {
+      GStorage.setXhsGridColumns(target);
+      setState(() {});
+    }
   }
 
   Widget _wrapCards(Widget cards) => widget.sliver
       ? cards
-      : CustomScrollView(
-          key: _viewportKey,
-          controller: _scroll,
-          physics: widget.physics,
-          semanticChildCount: widget.itemCount,
-          slivers: [cards]);
+      : Listener(
+          onPointerDown: _onPinchDown,
+          onPointerMove: _onPinchMove,
+          onPointerUp: _onPinchUp,
+          onPointerCancel: _onPinchUp,
+          child: CustomScrollView(
+              key: _viewportKey,
+              controller: _scroll,
+              physics: widget.physics,
+              semanticChildCount: widget.itemCount,
+              slivers: [cards]),
+        );
 }

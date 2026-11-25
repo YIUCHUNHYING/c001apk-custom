@@ -231,11 +231,17 @@ class _BasicNavigationState extends State<LiquidNavigationBar> {
                   return const SizedBox.shrink();
                 }
                 final theme = Theme.of(context);
+                final colors = theme.colorScheme;
                 final textHeight = MediaQuery.textScalerOf(context).scale(14);
                 final height = widget.tabs
                     ? math.max(48.0, textHeight + 24)
                     : math.max(64.0, textHeight + 40);
                 final length = _vertical ? bounds.maxHeight : bounds.maxWidth;
+                final radius =
+                    BorderRadius.circular(_vertical ? 28 : height / 2);
+                final glass = widget.refract &&
+                    widget.level != LiquidGlassLevel.low &&
+                    !MediaQuery.highContrastOf(context);
                 final selected = (_dragIndex ?? widget.selectedIndex)
                     .clamp(0, widget.labels.length - 1);
                 void drag(Offset point) => setState(() => _dragIndex =
@@ -245,10 +251,20 @@ class _BasicNavigationState extends State<LiquidNavigationBar> {
                         .floor()
                         .clamp(0, widget.labels.length - 1));
                 return _BasicRoundHitRegion(
-                    child: ClipRRect(
-                        borderRadius:
-                            BorderRadius.circular(_vertical ? 28 : height / 2),
-                        child: GestureDetector(
+                    child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: radius,
+                          boxShadow: [
+                            BoxShadow(
+                              color: colors.shadow.withValues(alpha: .12),
+                              blurRadius: 28,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                            borderRadius: radius,
+                            child: GestureDetector(
                           key: ValueKey(widget.tabs
                               ? 'liquid-tabs-surface'
                               : 'liquid-drag-surface'),
@@ -292,20 +308,41 @@ class _BasicNavigationState extends State<LiquidNavigationBar> {
                           child: SizedBox(
                               height: _vertical ? length : height,
                               child: Stack(children: [
+                                // 胶囊底色：高不透明度 + 柔和模糊，避免下方内容
+                                // 透出在边缘形成明显断层；底下垫一层柔和阴影让
+                                // 胶囊真正"浮"起来。
                                 Positioned.fill(
                                     child: IgnorePointer(
-                                        child: GlassSurface.navigationBase(
-                                            shader: null,
-                                            borderRadius: _vertical
-                                                ? BorderRadius.circular(28)
-                                                : null,
-                                            enabled: widget.refract,
-                                            extent: _vertical
-                                                ? Size(bounds.maxWidth, length)
-                                                : Size(bounds.maxWidth, height),
-                                            theme: theme,
-                                            level: widget.level,
-                                            shadow: false))),
+                                        child: ClipRRect(
+                                  borderRadius: radius,
+                                  child: glass
+                                      ? BackdropFilter(
+                                          filter: ui.ImageFilter.blur(
+                                              sigmaX: 14, sigmaY: 14),
+                                          child: ColoredBox(
+                                            color: colors.surface
+                                                .withValues(alpha: .95),
+                                            child: const SizedBox.expand(),
+                                          ),
+                                        )
+                                      : ColoredBox(
+                                          color: colors.surface,
+                                          child: const SizedBox.expand(),
+                                        ),
+                                ))),
+                                // 前景细描边：给玻璃一圈清晰边界，避免与内容糊在一起。
+                                Positioned.fill(
+                                    child: IgnorePointer(
+                                        child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    borderRadius: radius,
+                                    border: Border.all(
+                                      color: colors.outlineVariant
+                                          .withValues(alpha: .45),
+                                      width: .6,
+                                    ),
+                                  ),
+                                ))),
                                 Flex(
                                   direction: widget.direction,
                                   children: [
@@ -319,42 +356,133 @@ class _BasicNavigationState extends State<LiquidNavigationBar> {
                                               selected: selected == i,
                                               button: true,
                                               inMutuallyExclusiveGroup: true,
-                                              child: TextButton(
-                                                  onPressed: () => widget
-                                                      .onDestinationSelected(i),
-                                                  style: TextButton.styleFrom(
-                                                      padding:
-                                                          const EdgeInsets
-                                                              .symmetric(
-                                                              horizontal: 2),
-                                                      backgroundColor: selected == i
-                                                          ? theme.colorScheme
+                                              child: GestureDetector(
+                                                behavior:
+                                                    HitTestBehavior.opaque,
+                                                onTap: () => widget
+                                                    .onDestinationSelected(i),
+                                                // 选中底色用一个铺满整个 tab 的
+                                                // 圆角块，而不是 TextButton 自带的
+                                                // 背景（后者会被按钮 shape 与最小
+                                                // 尺寸切碎，看着像"被分割"）。
+                                                child: Padding(
+                                                  padding:
+                                                      EdgeInsets.symmetric(
+                                                    horizontal: 3,
+                                                    vertical:
+                                                        _vertical ? 3 : 5,
+                                                  ),
+                                                  child: AnimatedContainer(
+                                                    duration: const Duration(
+                                                        milliseconds: 220),
+                                                    curve:
+                                                        Curves.easeOutCubic,
+                                                    decoration: BoxDecoration(
+                                                      color: selected == i
+                                                          ? colors
                                                               .primaryContainer
                                                           : Colors.transparent,
-                                                      foregroundColor: selected == i
-                                                          ? theme.colorScheme
-                                                              .onPrimaryContainer
-                                                          : theme.colorScheme
-                                                              .onSurface),
-                                                  child: widget.tabs
-                                                      ? Text(widget.labels[i],
-                                                          maxLines: 1)
-                                                      : Flex(direction: _vertical ? Axis.horizontal : Axis.vertical, mainAxisSize: MainAxisSize.min, children: [
-                                                          Icon([
-                                                            Icons.home_outlined,
-                                                            Icons.feed_outlined,
-                                                            Icons.person_outline
-                                                          ][i % 3]),
-                                                          if (_vertical)
-                                                            const SizedBox(
-                                                                width: 10),
-                                                          Text(widget.labels[i],
-                                                              maxLines: 1),
-                                                        ]))))
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                        _vertical
+                                                            ? 14
+                                                            : (height - 10) / 2,
+                                                      ),
+                                                    ),
+                                                    child: Center(
+                                                      child: widget.tabs
+                                                          ? Text(
+                                                              widget.labels[i],
+                                                              maxLines: 1,
+                                                              style: TextStyle(
+                                                                fontWeight: selected ==
+                                                                        i
+                                                                    ? FontWeight
+                                                                        .w700
+                                                                    : FontWeight
+                                                                        .w500,
+                                                                color: selected ==
+                                                                        i
+                                                                    ? colors
+                                                                        .onPrimaryContainer
+                                                                    : colors
+                                                                        .onSurfaceVariant,
+                                                              ),
+                                                            )
+                                                          : Flex(
+                                                              direction: _vertical
+                                                                  ? Axis.horizontal
+                                                                  : Axis.vertical,
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .min,
+                                                              children: [
+                                                                Icon(
+                                                                  selected ==
+                                                                          i
+                                                                      ? [
+                                                                          Icons
+                                                                              .home,
+                                                                          Icons
+                                                                              .feed,
+                                                                          Icons
+                                                                              .person
+                                                                        ][i % 3]
+                                                                      : [
+                                                                          Icons
+                                                                              .home_outlined,
+                                                                          Icons
+                                                                              .feed_outlined,
+                                                                          Icons
+                                                                              .person_outline
+                                                                        ][i % 3],
+                                                                  size: 22,
+                                                                  color: selected ==
+                                                                          i
+                                                                      ? colors
+                                                                          .onPrimaryContainer
+                                                                      : colors
+                                                                          .onSurfaceVariant,
+                                                                ),
+                                                                SizedBox(
+                                                                    width: _vertical
+                                                                        ? 10
+                                                                        : 0,
+                                                                    height: _vertical
+                                                                        ? 0
+                                                                        : 2),
+                                                                Text(
+                                                                  widget
+                                                                      .labels[i],
+                                                                  maxLines: 1,
+                                                                  style:
+                                                                      TextStyle(
+                                                                    fontSize:
+                                                                        12,
+                                                                    fontWeight: selected ==
+                                                                            i
+                                                                        ? FontWeight
+                                                                            .w700
+                                                                        : FontWeight
+                                                                            .w500,
+                                                                    color: selected ==
+                                                                            i
+                                                                        ? colors
+                                                                            .onPrimaryContainer
+                                                                        : colors
+                                                                            .onSurfaceVariant,
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              )))
                                   ],
                                 ),
                               ])),
-                        )));
+                        ))));
               }))));
 }
 

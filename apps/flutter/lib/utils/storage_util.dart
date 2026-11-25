@@ -379,6 +379,23 @@ class GStorage {
     return settings.get(SettingsBoxKey.commentsInSidePane, defaultValue: true);
   }
 
+  /// 主页帖子是否使用小红书式固定列网格（默认开启；关闭则回到原始自适应布局）。
+  static bool get xhsGridLayout {
+    return settings.get(SettingsBoxKey.xhsGridLayout, defaultValue: true);
+  }
+
+  static void setXhsGridLayout(bool value) {
+    settings.put(SettingsBoxKey.xhsGridLayout, value);
+  }
+
+  /// 小红书网格每行列数（2~4，默认 3），双指捏合可调整。
+  static int get xhsGridColumns =>
+      settings.get(SettingsBoxKey.xhsGridColumns, defaultValue: 3);
+
+  static void setXhsGridColumns(int value) {
+    settings.put(SettingsBoxKey.xhsGridColumns, value.clamp(2, 4));
+  }
+
   static bool get checkUpdate {
     return settings.get(SettingsBoxKey.checkUpdate, defaultValue: true);
   }
@@ -580,6 +597,8 @@ class SettingsBoxKey {
       showEmoji = 'showEmoji',
       foldCoinReplies = 'foldCoinReplies',
       commentsInSidePane = 'commentsInSidePane',
+      xhsGridLayout = 'xhsGridLayout',
+      xhsGridColumns = 'xhsGridColumns',
       checkUpdate = 'checkUpdate',
       checkCount = 'checkCount',
       installTime = 'installTime',

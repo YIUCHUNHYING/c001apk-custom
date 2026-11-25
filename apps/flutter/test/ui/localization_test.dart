@@ -490,6 +490,12 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     Request.dio.httpClientAdapter = EmptyGuestAdapter()..showHomeCards = true;
+    // 本用例要验证「滚轮能滚动首页」，小红书网格默认 3 列会让合成数据不足一屏，
+    // 因此固定用原始布局（卡片更高、内容可滚动），结束后恢复默认。
+    await tester.runAsync(
+        () => GStorage.settings.put(SettingsBoxKey.xhsGridLayout, false));
+    addTearDown(
+        () => GStorage.settings.delete(SettingsBoxKey.xhsGridLayout));
     await tester.pumpWidget(const C001APKAPP());
     await tester.pumpAndSettle();
     final list = find

@@ -88,7 +88,8 @@ class ImageTextScrollCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 10, vertical: _verticalPadding),
                 child: Text(
-                  data.title.orEmpty,
+                  // 末尾换行保持两行高度，卡片高度才与预算一致。
+                  '${data.title.orEmpty}\n',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(

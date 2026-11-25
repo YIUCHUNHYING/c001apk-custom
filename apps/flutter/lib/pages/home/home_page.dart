@@ -9,7 +9,7 @@ import 'package:get/get.dart';
 import '../../components/mouse_drag_scroll.dart';
 import '../../components/feed_navigation.dart';
 import '../../components/liquid_top_bar.dart';
-import '../../components/liquid_navigation_bar.dart';
+import '../../components/basic_glass.dart' show GlassTabStrip;
 import '../../components/pinch_gesture.dart';
 import '../../utils/storage_util.dart';
 import '../../constants/home_tab.dart';
@@ -160,18 +160,15 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             onPressed: _editTabs,
             child: const Icon(Icons.tune)),
       ],
-      glassTitle: (context) => SizedBox(
-          width: _tabTypes.length *
-                  (MediaQuery.textScalerOf(context).scale(14) * 2 + 28) +
-              8,
-          child: AnimatedBuilder(
+      glassTitle: (context) => AnimatedBuilder(
             animation: _tabController,
-            builder: (context, _) => LiquidNavigationBar.tabs(
-              key: ValueKey(_tabTypes.map((tab) => tab.storageId).join(',')),
-              selectedIndex: _tabController.index,
+            builder: (context, _) => GlassTabStrip(
+              key: const ValueKey('liquid-tabs-surface'),
               labels: _tabTypes.map((type) => type.label).toList(),
+              selectedIndex: _tabController.index,
+              enabled: GStorage.liquidGlass,
               level: GStorage.liquidGlassLevel,
-              onDestinationSelected: (index) {
+              onSelected: (index) {
                 if (_tabController.index == index) {
                   scrollToTop(index);
                 } else {
@@ -179,7 +176,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 }
               },
             ),
-          )),
+          ),
       title: MouseDragScroll(
         child: TabBar(
           controller: _tabController,

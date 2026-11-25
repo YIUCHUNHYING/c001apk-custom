@@ -6,6 +6,25 @@ import 'package:flutter/rendering.dart';
 
 import '../constants/liquid_glass_level.dart';
 
+/// 导航玻璃的光学参数：档位越高越通透、模糊越强。
+/// 底色统一用 surfaceContainer（与原版 GlassSurface 一致），避免发白。
+({double blur, double alpha, double border}) liquidGlassOptics(
+  LiquidGlassLevel level, {
+  required bool enabled,
+  bool pressed = false,
+}) {
+  if (!enabled || !level.usesBackdrop) {
+    return (blur: 0, alpha: 1, border: .45);
+  }
+  return switch (level) {
+    LiquidGlassLevel.low => (blur: 0, alpha: 1, border: .45),
+    LiquidGlassLevel.medium => (blur: 4, alpha: .94, border: .45),
+    LiquidGlassLevel.high => (blur: 10, alpha: .90, border: .55),
+    LiquidGlassLevel.complete =>
+      (blur: 16, alpha: .86, border: pressed ? .65 : 0),
+  };
+}
+
 /// Public backend: ordinary translucent/frosted surfaces and navigation.
 /// The official source assembly supplies the same API with its own renderer.
 class GlassSurface extends StatelessWidget {
@@ -246,20 +265,17 @@ class _BasicNavigationState extends State<LiquidNavigationBar> {
                 final length = _vertical ? bounds.maxHeight : bounds.maxWidth;
                 final radius =
                     BorderRadius.circular(_vertical ? 28 : height / 2);
-                final glass = widget.refract &&
-                    widget.level.usesBackdrop &&
-                    !MediaQuery.highContrastOf(context);
                 // 档位光学参数：低档不模糊、中档柔光、高档更通透、
                 // 「完全」平时无描边、按住时边缘微光。
-                final (blurSigma, tintAlpha, borderAlpha) = !glass
-                    ? (0.0, 1.0, .45)
-                    : switch (widget.level) {
-                        LiquidGlassLevel.low => (0.0, 1.0, .45),
-                        LiquidGlassLevel.medium => (8.0, .90, .45),
-                        LiquidGlassLevel.high => (18.0, .78, .55),
-                        LiquidGlassLevel.complete =>
-                          (24.0, .70, _pressed ? .65 : 0.0),
-                      };
+                final optics = liquidGlassOptics(
+                  widget.level,
+                  enabled: widget.refract &&
+                      !MediaQuery.highContrastOf(context),
+                  pressed: _pressed,
+                );
+                final blurSigma = optics.blur;
+                final tintAlpha = optics.alpha;
+                final borderAlpha = optics.border;
                 final selected = (_dragIndex ?? widget.selectedIndex)
                     .clamp(0, widget.labels.length - 1);
                 void drag(Offset point) => setState(() => _dragIndex =
@@ -337,13 +353,13 @@ class _BasicNavigationState extends State<LiquidNavigationBar> {
                                               sigmaX: blurSigma,
                                               sigmaY: blurSigma),
                                           child: ColoredBox(
-                                            color: colors.surface
+                                            color: colors.surfaceContainer
                                                 .withValues(alpha: tintAlpha),
                                             child: const SizedBox.expand(),
                                           ),
                                         )
                                       : ColoredBox(
-                                          color: colors.surface,
+                                          color: colors.surfaceContainer,
                                           child: const SizedBox.expand(),
                                         ),
                                 ))),
@@ -524,4 +540,164 @@ class _BasicRoundHitBox extends RenderProxyBox {
               Radius.circular(size.height > size.width ? 28 : size.height / 2))
           .contains(position) &&
       super.hitTest(result, position: position);
+}
+
+/// 顶部玻璃分类条：铺满可用宽度，标签按等分宽度用 FittedBox 缩放，
+/// 任何宽度下都能完整显示分类名，不会被裁成空白；支持横向拖动切换。
+class GlassTabStrip extends StatefulWidget {
+  const GlassTabStrip({
+    super.key,
+    required this.labels,
+    required this.selectedIndex,
+    required this.onSelected,
+    this.height = 48,
+    this.enabled = true,
+    this.level = LiquidGlassLevel.medium,
+  });
+
+  final List<String> labels;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+  final double height;
+  final bool enabled;
+  final LiquidGlassLevel level;
+
+  @override
+  State<GlassTabStrip> createState() => _GlassTabStripState();
+}
+
+class _GlassTabStripState extends State<GlassTabStrip> {
+  bool _pressed = false;
+  int? _dragIndex;
+
+  void _setPressed(bool value) {
+    if (widget.level != LiquidGlassLevel.complete || _pressed == value) return;
+    setState(() => _pressed = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.labels.isEmpty) return const SizedBox.shrink();
+    final colors = Theme.of(context).colorScheme;
+    final optics = liquidGlassOptics(widget.level,
+        enabled: widget.enabled, pressed: _pressed);
+    final radius = BorderRadius.circular(widget.height / 2);
+    final selected =
+        (_dragIndex ?? widget.selectedIndex).clamp(0, widget.labels.length - 1);
+    return SizedBox(
+      height: widget.height,
+      child: ClipRRect(
+        borderRadius: radius,
+        child: Stack(fit: StackFit.expand, children: [
+          if (optics.blur > 0)
+            BackdropFilter(
+              filter: ui.ImageFilter.blur(
+                  sigmaX: optics.blur, sigmaY: optics.blur),
+              child: ColoredBox(
+                  color:
+                      colors.surfaceContainer.withValues(alpha: optics.alpha)),
+            )
+          else
+            ColoredBox(color: colors.surfaceContainer),
+          IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                border: Border.all(
+                    color:
+                        colors.outlineVariant.withValues(alpha: optics.border),
+                    width: .6),
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: LayoutBuilder(builder: (context, constraints) {
+              void drag(Offset local) {
+                final width = constraints.maxWidth;
+                if (width <= 0) return;
+                setState(() => _dragIndex =
+                    (local.dx / width * widget.labels.length)
+                        .floor()
+                        .clamp(0, widget.labels.length - 1));
+              }
+
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onHorizontalDragStart: (event) => drag(event.localPosition),
+                onHorizontalDragUpdate: (event) => drag(event.localPosition),
+                onHorizontalDragCancel: () =>
+                    setState(() => _dragIndex = null),
+                onHorizontalDragEnd: (_) {
+                  final index = _dragIndex;
+                  setState(() => _dragIndex = null);
+                  if (index != null) widget.onSelected(index);
+                },
+                child: Row(
+                  children: [
+                    for (var i = 0; i < widget.labels.length; i++)
+                      Expanded(
+                        child: Semantics(
+                          label: widget.labels[i],
+                          excludeSemantics: true,
+                          selected: selected == i,
+                          button: true,
+                          inMutuallyExclusiveGroup: true,
+                          child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTapDown: (_) => _setPressed(true),
+                          onTapUp: (_) => _setPressed(false),
+                          onTapCancel: () => _setPressed(false),
+                          onTap: () => widget.onSelected(i),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 3, vertical: 5),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 220),
+                              curve: Curves.easeOutCubic,
+                              decoration: BoxDecoration(
+                                color: selected == i
+                                    ? colors.primaryContainer
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(
+                                    (widget.height - 10) / 2),
+                              ),
+                              child: Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 4),
+                                  // 宽度不足时整体等比缩小，保证字始终完整可见。
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      widget.labels[i],
+                                      maxLines: 1,
+                                      softWrap: false,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        height: 1.15,
+                                        fontWeight: selected == i
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
+                                        color: selected == i
+                                            ? colors.onPrimaryContainer
+                                            : colors.onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            }),
+          ),
+        ]),
+      ),
+    );
+  }
 }

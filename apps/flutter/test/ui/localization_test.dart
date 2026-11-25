@@ -415,6 +415,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('liquid-tabs-surface')), findsOneWidget);
     expect(controller.index, controller.length - 1);
+    // 玻璃分类条必须真的把标签画出来（曾经整条只有背景、一个字都没有）。
+    final glassTabLabel = find.descendant(
+        of: find.byKey(const ValueKey('liquid-tabs-surface')),
+        matching: find.text('酷图'));
+    expect(glassTabLabel, findsOneWidget);
+    expect(tester.getSize(glassTabLabel).width, greaterThan(8));
+    expect(tester.getSize(glassTabLabel).height, greaterThan(8));
     await tester.tap(mainDestination('关注'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('glass-search')), findsOneWidget);

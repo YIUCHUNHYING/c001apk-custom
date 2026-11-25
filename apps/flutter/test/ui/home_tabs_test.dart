@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:c001apk_flutter/constants/home_tab.dart';
-import 'package:c001apk_flutter/components/liquid_navigation_bar.dart';
+import 'package:c001apk_flutter/components/basic_glass.dart';
 import 'package:c001apk_flutter/logic/network/request.dart';
 import 'package:c001apk_flutter/logic/model/feed/datum.dart';
 import 'package:c001apk_flutter/pages/home/home_page.dart';
@@ -232,9 +232,10 @@ void main() {
       expect(controller.scrollController, same(scroll));
       expect(controller.scrollController!.offset, 250);
       if (floating) {
+        // 悬浮形态用的是自建的顶部玻璃分类条。
         expect(
             tester
-                .widget<LiquidNavigationBar>(find.byType(LiquidNavigationBar))
+                .widget<GlassTabStrip>(find.byType(GlassTabStrip))
                 .selectedIndex,
             1);
       } else {

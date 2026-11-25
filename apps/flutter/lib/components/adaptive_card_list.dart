@@ -72,6 +72,8 @@ class _AdaptiveCardListState extends State<AdaptiveCardList> {
   VoidCallback? _settingsListener;
   // 当前可用宽度允许的最大列数，捏合时用它兜住目标值。
   int _maxByWidth = 4;
+  // 是否横屏：横竖屏分别记忆列数。
+  bool _landscape = false;
   // 捏合提示：只让这一小块区域重建，不牵动整个列表。
   final _hintColumns = ValueNotifier<int>(3);
   final _hintVisible = ValueNotifier<bool>(false);
@@ -186,7 +188,11 @@ class _AdaptiveCardListState extends State<AdaptiveCardList> {
     // 设置里切换「小红书网格布局」或列数变化时立即重建列表。
     try {
       _settingsListenable = GStorage.settings.listenable(
-        keys: [SettingsBoxKey.xhsGridLayout, SettingsBoxKey.xhsGridColumns],
+        keys: [
+          SettingsBoxKey.xhsGridLayout,
+          SettingsBoxKey.xhsGridColumns,
+          SettingsBoxKey.xhsGridColumnsLandscape,
+        ],
       );
       _settingsListener = () {
         if (mounted) setState(() {});
@@ -303,6 +309,9 @@ class _AdaptiveCardListState extends State<AdaptiveCardList> {
   Widget _buildCards(BuildContext context, double width) {
     final scale =
         (MediaQuery.textScalerOf(context).scale(16) / 16).clamp(1.0, 2.0);
+    // 横竖屏分别记忆列数，旋转后不需要重新捏合。
+    final size = MediaQuery.sizeOf(context);
+    _landscape = size.width > size.height;
     // 小红书模式使用固定列数（2~4，双指捏合可调）；最小卡片宽度按 96 逻辑像素
     // 估算，竖屏平板能捏到 4 列、手机能捏到 3 列，不再只在大屏生效。
     final xhs = _xhsEnabled;
@@ -378,7 +387,9 @@ class _AdaptiveCardListState extends State<AdaptiveCardList> {
 
   int get _xhsColumns {
     try {
-      return GStorage.xhsGridColumns;
+      return _landscape
+          ? GStorage.xhsGridColumnsLandscape
+          : GStorage.xhsGridColumns;
     } catch (_) {
       return 3;
     }
@@ -446,7 +457,11 @@ class _AdaptiveCardListState extends State<AdaptiveCardList> {
     if (!_xhsEnabled) return;
     final effective = _effectiveColumns(target);
     if (effective == _xhsColumns) return;
-    GStorage.setXhsGridColumns(effective);
+    if (_landscape) {
+      GStorage.setXhsGridColumnsLandscape(effective);
+    } else {
+      GStorage.setXhsGridColumns(effective);
+    }
     if (mounted) setState(() {});
   }
 

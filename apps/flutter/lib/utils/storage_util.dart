@@ -396,6 +396,14 @@ class GStorage {
     settings.put(SettingsBoxKey.xhsGridColumns, value.clamp(2, 4));
   }
 
+  /// 横屏时的小红书网格列数，独立记忆，旋转后不需要重新捏合。
+  static int get xhsGridColumnsLandscape =>
+      settings.get(SettingsBoxKey.xhsGridColumnsLandscape, defaultValue: 3);
+
+  static void setXhsGridColumnsLandscape(int value) {
+    settings.put(SettingsBoxKey.xhsGridColumnsLandscape, value.clamp(2, 4));
+  }
+
   static bool get checkUpdate {
     return settings.get(SettingsBoxKey.checkUpdate, defaultValue: true);
   }
@@ -599,6 +607,7 @@ class SettingsBoxKey {
       commentsInSidePane = 'commentsInSidePane',
       xhsGridLayout = 'xhsGridLayout',
       xhsGridColumns = 'xhsGridColumns',
+      xhsGridColumnsLandscape = 'xhsGridColumnsLandscape',
       checkUpdate = 'checkUpdate',
       checkCount = 'checkCount',
       installTime = 'installTime',

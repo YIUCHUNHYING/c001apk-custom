@@ -79,8 +79,6 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
   Datum? _supplementData;
   // 独立路由宽屏下右侧评论栏是否展开（设置开关打开时默认展开）。
   bool _sideCommentsVisible = true;
-  // 分栏容器路径下是否已自动展开右侧评论面板（仅首次自动触发一次）。
-  bool _autoOpenedComments = false;
 
   void _updateSupplement(BuildContext context) {
     final state = _feedController.feedState.value;
@@ -438,21 +436,6 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
     } else if (mounted) {
       setState(() => _sideCommentsVisible = true);
     }
-  }
-
-  /// 小红书式：进入详情后，若处于分栏阅读容器内且开关开启、屏幕够宽，
-  /// 自动在右侧展开评论面板，无需用户再点击评论入口。仅自动触发一次，
-  /// 用户手动收起后不再打扰。
-  void _scheduleAutoOpenComments(BuildContext context) {
-    if (_autoOpenedComments) return;
-    if (!ReadingCommentsScope.inPaneOf(context)) return;
-    if (!_canUseSideComments(context)) return;
-    if (_feedController.feedState.value is! Success) return;
-    _autoOpenedComments = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !context.mounted) return;
-      _openCommentsInPane(context);
-    });
   }
 
   Widget _buildPinWidget(BuildContext context) {
@@ -917,7 +900,6 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
     // 评论已移到右侧面板时，正文只保留内容，避免同一批评论重复出现。
     final commentsInPane = ReadingCommentsScope.activeOf(context);
     _updateSupplement(context);
-    _scheduleAutoOpenComments(context);
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: Theme.of(context).colorScheme.surface,

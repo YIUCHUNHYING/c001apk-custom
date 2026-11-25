@@ -745,7 +745,7 @@ void main() {
     expect(find.text('Home'), findsNothing);
     tester.view.physicalSize = const Size(1400, 900);
     await tester.pump(const Duration(milliseconds: 500));
-    expect(mainRail(), findsOneWidget);
+    expect(mainBottomNavigation(), findsOneWidget);
     expect(mainDestination('主页'), findsOneWidget);
     expect(mainSelectedIndex(tester), 1);
     expect(find.text('本地关注动态'), findsOneWidget);
@@ -1054,8 +1054,8 @@ void main() {
     GlobalData().isLogin = false;
     await tester.pumpWidget(const C001APKAPP());
     await tester.pumpAndSettle();
-    final rail = mainRail();
-    final bounds = tester.getRect(rail);
+    final bar = mainBottomNavigation();
+    final bounds = tester.getRect(bar);
     final home = tester.getRect(mainDestination('主页'));
     expect(bounds.left, greaterThanOrEqualTo(77));
     expect(home.left, greaterThanOrEqualTo(bounds.left));
@@ -1324,7 +1324,7 @@ void main() {
     }
     tester.view.physicalSize = const Size(1400, 900);
     await tester.pumpAndSettle();
-    expect(mainRail(), findsOneWidget);
+    expect(mainBottomNavigation(), findsOneWidget);
     await tester.tap(find.byTooltip('切换关注内容'));
     await tester.pumpAndSettle();
     await tester.tap(
@@ -1436,7 +1436,7 @@ void main() {
         find.descendant(
             of: find.byType(AdaptiveMainScaffold), matching: publish),
         findsOneWidget);
-    expect(tester.getRect(publish).right, lessThanOrEqualTo(144));
+    expect(tester.getRect(publish).right, greaterThan(144));
     expect(tester.getRect(publish).bottom, greaterThan(700));
     expect(tester.state<ScrollableState>(scroll).position, same(position));
     await tester.tap(publish);

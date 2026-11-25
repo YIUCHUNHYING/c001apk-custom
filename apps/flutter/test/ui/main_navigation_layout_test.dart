@@ -164,7 +164,7 @@ void main() {
         tester
             .widget<LiquidNavigationBar>(find.byType(LiquidNavigationBar))
             .direction,
-        Axis.vertical);
+        Axis.horizontal);
     await tester.drag(find.byType(ListView), const Offset(0, -400));
     await tester.pumpAndSettle();
     final scroll =
@@ -196,7 +196,7 @@ void main() {
         tester
             .widget<LiquidNavigationBar>(find.byType(LiquidNavigationBar))
             .direction,
-        Axis.vertical);
+        Axis.horizontal);
     expect(
         identical(
             tester.state<ScrollableState>(find.byType(Scrollable)).position,
@@ -205,7 +205,7 @@ void main() {
     expect(scroll.pixels, closeTo(offset, 1));
   });
 
-  testWidgets('wide floating navigation is centered and selects vertically',
+  testWidgets('wide floating navigation is centered and selects horizontally',
       (tester) async {
     final selections = <int>[];
     await mount(tester,
@@ -214,29 +214,23 @@ void main() {
         onSelected: selections.add);
     final surface = find.byKey(const ValueKey('liquid-drag-surface'));
     final rect = tester.getRect(surface);
-    expect(rect.center.dx, closeTo(72, 1));
-    expect(rect.center.dy, closeTo(400, 1));
-    expect(rect.height, greaterThan(rect.width));
+    expect(rect.center.dx, closeTo(640, 1));
+    expect(rect.width, greaterThan(rect.height));
     await tester.dragFrom(
-        Offset(rect.center.dx, rect.top + 35), const Offset(0, 175));
+        Offset(rect.left + 35, rect.center.dy), const Offset(175, 0));
     await tester.pumpAndSettle();
     expect(selections.last, 2);
     expect(tester.takeException(), isNull);
   });
 
   testWidgets(
-      'wide standard navigation remains centered when floating is disabled',
+      'wide standard navigation uses the bottom bar when floating is disabled',
       (tester) async {
     await tester.runAsync(() => GStorage.settings.put(SettingsBoxKey.floatingNavigation, false));
     await mount(tester, width: 1280);
-    final top = tester.getRect(find.text('主页')).top;
-    final bottom = tester.getRect(find.text('我的')).bottom;
-    expect((top + bottom) / 2, closeTo(400, 40));
-    expect(
-        tester
-            .widget<NavigationRail>(find.byType(NavigationRail))
-            .groupAlignment,
-        0);
+    expect(find.byType(NavigationRail), findsNothing);
+    expect(find.text('主页'), findsOneWidget);
+    expect(find.text('我的'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

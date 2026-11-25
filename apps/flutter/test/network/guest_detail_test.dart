@@ -291,6 +291,10 @@ void main() {
 
   testWidgets('scrolling to comments shows an action without a request',
       (tester) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     adapter.apiBody = {
       'data': {
         ...(adapter.webBody['data'] as Map<String, dynamic>),

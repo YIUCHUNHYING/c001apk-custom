@@ -126,6 +126,10 @@ void main() {
       }
     };
     Request.dio.httpClientAdapter = adapter;
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(const GetMaterialApp(home: FeedPage(id: '123')));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);

@@ -133,9 +133,11 @@ class AdaptiveMainScaffold extends StatelessWidget {
                 ),
               );
             }),
-            bottomNavigationBar: useRail || keyboard
+            // 宽屏改用全宽标准底栏，避免浮动小胶囊在宽屏两侧留下大片空白；
+            // 窄屏（手机）保留浮动玻璃胶囊的轻盈质感。
+            bottomNavigationBar: keyboard
                 ? null
-                : floating
+                : (floating && constraints.maxWidth < 600)
                     ? LiquidNavigationBar(
                         selectedIndex: selectedIndex,
                         onDestinationSelected: onDestinationSelected,

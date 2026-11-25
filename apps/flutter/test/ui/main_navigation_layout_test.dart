@@ -160,11 +160,8 @@ void main() {
   testWidgets('Windows glass preferences and width changes preserve the feed',
       (tester) async {
     await mount(tester, platform: TargetPlatform.windows, width: 1280);
-    expect(
-        tester
-            .widget<LiquidNavigationBar>(find.byType(LiquidNavigationBar))
-            .direction,
-        Axis.horizontal);
+    // 宽屏改用全宽标准底栏。
+    expect(find.byType(NavigationBar), findsOneWidget);
     await tester.drag(find.byType(ListView), const Offset(0, -400));
     await tester.pumpAndSettle();
     final scroll =
@@ -192,11 +189,9 @@ void main() {
     final offset = scroll.pixels;
     await tester.binding.setSurfaceSize(const Size(900, 800));
     await tester.pumpAndSettle();
-    expect(
-        tester
-            .widget<LiquidNavigationBar>(find.byType(LiquidNavigationBar))
-            .direction,
-        Axis.horizontal);
+    // 宽屏改用全宽标准底栏。
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byType(LiquidNavigationBar), findsNothing);
     expect(
         identical(
             tester.state<ScrollableState>(find.byType(Scrollable)).position,
@@ -205,16 +200,16 @@ void main() {
     expect(scroll.pixels, closeTo(offset, 1));
   });
 
-  testWidgets('wide floating navigation is centered and selects horizontally',
+  testWidgets('floating navigation is centered and selects horizontally',
       (tester) async {
     final selections = <int>[];
     await mount(tester,
-        width: 1280,
+        width: 400,
         platform: TargetPlatform.windows,
         onSelected: selections.add);
     final surface = find.byKey(const ValueKey('liquid-drag-surface'));
     final rect = tester.getRect(surface);
-    expect(rect.center.dx, closeTo(640, 1));
+    expect(rect.center.dx, closeTo(200, 1));
     expect(rect.width, greaterThan(rect.height));
     await tester.dragFrom(
         Offset(rect.left + 35, rect.center.dy), const Offset(175, 0));

@@ -26,7 +26,7 @@
 
     <application
         android:enableOnBackInvokedCallback="true"
-        android:label="酷安杂志版"
+        android:label="酷安 杂志版"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"

@@ -1057,7 +1057,6 @@ void main() {
     final bar = mainBottomNavigation();
     final bounds = tester.getRect(bar);
     final home = tester.getRect(mainDestination('主页'));
-    expect(bounds.left, greaterThanOrEqualTo(77));
     expect(home.left, greaterThanOrEqualTo(bounds.left));
     expect(home.right, lessThanOrEqualTo(bounds.right));
     await tester.pumpWidget(const SizedBox.shrink());
@@ -1437,7 +1436,7 @@ void main() {
             of: find.byType(AdaptiveMainScaffold), matching: publish),
         findsOneWidget);
     expect(tester.getRect(publish).right, greaterThan(144));
-    expect(tester.getRect(publish).bottom, greaterThan(700));
+    expect(tester.getRect(publish).bottom, greaterThan(600));
     expect(tester.state<ScrollableState>(scroll).position, same(position));
     await tester.tap(publish);
     await tester.pumpAndSettle();

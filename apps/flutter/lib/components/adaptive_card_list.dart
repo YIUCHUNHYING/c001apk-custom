@@ -59,7 +59,6 @@ class _AdaptiveCardListState extends State<AdaptiveCardList> {
   int? _columns;
   int? _cachedColumns;
   double _pinchStartColumns = 3;
-  double _pinchScale = 1;
   Listenable? _settingsListenable;
   VoidCallback? _settingsListener;
   int? _anchorIndex;

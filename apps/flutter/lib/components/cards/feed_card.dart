@@ -378,42 +378,33 @@ class FeedCard extends StatelessWidget {
     final iconSize = dense ? 12.0 : 14.0;
     final textStyle =
         TextStyle(fontSize: dense ? 11 : 12, color: colors.outline);
-    Widget stat(IconData icon, String text) => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: iconSize, color: colors.outline),
-            const SizedBox(width: 3),
-            Text(text, style: textStyle),
-          ],
-        );
-    // 用 Wrap 收尾：窄卡片上昵称会先省略，点赞数换到下一行，不会溢出。
-    return Wrap(
-      spacing: dense ? 6 : 8,
-      runSpacing: 4,
-      crossAxisAlignment: WrapCrossAlignment.center,
+    // 小红书式：头像+昵称靠左，点赞固定在最右侧。
+    return Row(
       children: [
-        Row(mainAxisSize: MainAxisSize.min, children: [
-          clipNetworkImage(
-            data.userAvatar.orEmpty,
-            radius: 50,
-            width: size,
-            height: size,
-            isAvatar: true,
-            memCacheWidth:
-                (size * MediaQuery.devicePixelRatioOf(context)).round(),
+        clipNetworkImage(
+          data.userAvatar.orEmpty,
+          radius: 50,
+          width: size,
+          height: size,
+          isAvatar: true,
+          memCacheWidth:
+              (size * MediaQuery.devicePixelRatioOf(context)).round(),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            data.userInfo?.username ?? '',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textStyle,
           ),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              data.userInfo?.username ?? '',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: textStyle,
-            ),
-          ),
-        ]),
-        if (data.likenum != null)
-          stat(Icons.thumb_up_alt_outlined, '${data.likenum}'),
+        ),
+        if (data.likenum != null) ...[
+          Icon(Icons.thumb_up_alt_outlined,
+              size: iconSize, color: colors.outline),
+          const SizedBox(width: 3),
+          Text('${data.likenum}', style: textStyle),
+        ],
       ],
     );
   }

@@ -271,21 +271,29 @@ class FeedCard extends StatelessWidget {
 
   /// 保留原版卡片上的话题/关联入口，点一下就能进对应话题页。
   Widget _coverTopics(BuildContext context, {required double maxWidth}) {
-    final rows = <Datum>[
-      if (data.targetRow != null) data.targetRow!,
-      ...?data.relationRows,
+    final rows = <({String? logo, String? title, String? url})>[
+      if (data.targetRow != null)
+        (
+          logo: data.targetRow!.logo,
+          title: data.targetRow!.title,
+          url: data.targetRow!.url
+        ),
+      for (final row in data.relationRows ?? const [])
+        (logo: row.logo, title: row.title, url: row.url),
     ];
     return Wrap(
       spacing: 6,
       runSpacing: 5,
       children: [
         for (final row in rows.take(4))
-          _topicChip(context, row, maxWidth: maxWidth),
+          _topicChip(context, row.logo, row.title, row.url,
+              maxWidth: maxWidth),
       ],
     );
   }
 
-  Widget _topicChip(BuildContext context, Datum row,
+  Widget _topicChip(
+      BuildContext context, String? logo, String? title, String? url,
       {required double maxWidth}) {
     final colors = Theme.of(context).colorScheme;
     return ConstrainedBox(
@@ -295,14 +303,13 @@ class FeedCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
-          onTap: () =>
-              Utils.onOpenLink(row.url.orEmpty, row.title, true, context),
+          onTap: () => Utils.onOpenLink(url.orEmpty, title, true, context),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              if (!row.logo.isNullOrEmpty) ...[
+              if (!logo.isNullOrEmpty) ...[
                 clipNetworkImage(
-                  row.logo!,
+                  logo!,
                   width: 14,
                   height: 14,
                   radius: 3,
@@ -313,7 +320,7 @@ class FeedCard extends StatelessWidget {
               ],
               Flexible(
                 child: Text(
-                  row.title.orEmpty,
+                  title.orEmpty,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

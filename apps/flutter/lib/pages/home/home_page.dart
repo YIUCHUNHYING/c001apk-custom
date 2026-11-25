@@ -184,9 +184,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           dividerColor: Theme.of(context).platform == TargetPlatform.android
               ? Colors.transparent
               : null,
-          tabAlignment: Theme.of(context).platform == TargetPlatform.android
-              ? TabAlignment.start
-              : null,
+          tabAlignment: MediaQuery.sizeOf(context).width >= 720
+              ? TabAlignment.center
+              : Theme.of(context).platform == TargetPlatform.android
+                  ? TabAlignment.start
+                  : null,
           onTap: (index) {
             if (!_tabController.indexIsChanging) {
               scrollToTop(index);

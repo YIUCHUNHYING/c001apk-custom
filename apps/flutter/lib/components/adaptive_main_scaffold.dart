@@ -29,9 +29,12 @@ class AdaptiveMainScaffold extends StatelessWidget {
         ]),
         builder: (context, _, __) =>
             LayoutBuilder(builder: (context, constraints) {
+          // 小红书式布局：底部导航在横屏也保持底部，与竖屏一致，禁用左侧
+          // 导航栏。阈值设为无穷大，等价于 useRail 恒为 false（保留布尔以便
+          // 下游复用，运行时不会触发左侧栏分支）。
           final useRail =
               constraints.maxWidth - MediaQuery.paddingOf(context).horizontal >=
-                  600;
+                  double.infinity;
           final floating = GStorage.floatingNavigation;
           final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
           return Scaffold(

@@ -433,7 +433,7 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
     if (ReadingCommentsScope.inPaneOf(context)) {
       ReadingCommentsOpen(
         _id,
-        (paneContext) => _buildCommentsPane(paneContext, docked: true),
+        (paneContext) => _buildCommentsPane(paneContext),
       ).dispatch(context);
     } else if (mounted) {
       setState(() => _sideCommentsVisible = true);
@@ -831,20 +831,9 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
     );
   }
 
-  /// 关闭右侧评论：分栏容器走通知；独立路由（body 内嵌）直接 setState 收起。
-  void _closeCommentsPane(BuildContext context, {required bool docked}) {
-    if (docked) {
-      ReadingCommentsClose(_id).dispatch(context);
-    } else if (mounted) {
-      setState(() => _sideCommentsVisible = false);
-    }
-  }
-
   /// 右侧评论面板。评论列表与正文内嵌版共用 [_buildFeedReply]，因此滚动、
   /// 加载更多、置顶、酷币折叠、点赞/回复等状态都保持同一份。
-  ///
-  /// [docked] 为 true 表示挂在分栏容器右侧栏，否则是独立路由 body 内嵌分栏。
-  Widget _buildCommentsPane(BuildContext context, {bool docked = false}) {
+  Widget _buildCommentsPane(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     // 用单一 CustomScrollView 承载「标题栏 + 评论列表」，避免 Column+Expanded
     // 在父级约束不满足（高度 unbounded）时抛 RenderFlex 异常、整块渲染成
@@ -878,11 +867,6 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
                               _feedController.id,
                               _feedController.feedUsername,
                               null)),
-                    IconButton(
-                        tooltip: '收起评论',
-                        icon: const Icon(Icons.chevron_right),
-                        onPressed: () =>
-                            _closeCommentsPane(context, docked: docked)),
                   ]),
                 ),
               ),
@@ -1222,7 +1206,7 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
                     ),
                   ),
                 ),
-                child: _buildCommentsPane(context, docked: false),
+                child: _buildCommentsPane(context),
               ),
             ),
           ],

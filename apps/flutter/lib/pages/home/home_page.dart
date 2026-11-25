@@ -10,6 +10,7 @@ import '../../components/mouse_drag_scroll.dart';
 import '../../components/feed_navigation.dart';
 import '../../components/liquid_top_bar.dart';
 import '../../components/liquid_navigation_bar.dart';
+import '../../components/pinch_gesture.dart';
 import '../../utils/storage_util.dart';
 import '../../constants/home_tab.dart';
 import 'home_tabs_page.dart';
@@ -134,7 +135,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final body = KeyedSubtree(
         key: _bodyKey,
-        child: TabBarView(controller: _tabController, children: _pages));
+        // 双指捏合优先于 TabBarView 的横滑，避免「想捏合却切了 tab」。
+        child: PinchGestureDetector(
+          child: TabBarView(controller: _tabController, children: _pages),
+        ));
     // Reparent the keyed body so the original controllers and scroll positions
     // survive removing the home toolbar from the reading supplement.
     if (FeedNavigation.compactOf(context)) return Material(child: body);

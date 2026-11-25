@@ -339,7 +339,7 @@ class _SettingsDetailPageState extends State<SettingsDetailPage> {
               SwitchItem(
                 icon: Icons.grid_view_rounded,
                 title: '小红书网格布局',
-                subtitle: '主页帖子按固定列数铺排，双指捏合可切换每行 2~4 个；关闭则回到原始自适应布局',
+                subtitle: '帖子改为封面在上、内容在下，按固定列数铺排；双指捏合可切换每行 2~4 个，关闭则回到原始布局',
                 boxKey: SettingsBoxKey.xhsGridLayout,
                 defaultValue: true,
               ),

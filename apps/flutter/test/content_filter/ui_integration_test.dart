@@ -90,6 +90,9 @@ void main() {
       SettingsBoxKey.sdkInt: '33',
       SettingsBoxKey.userAgent: 'SyntheticTest/1.0',
       SettingsBoxKey.recordHistory: false,
+      // 这些用例检查完整卡片上的内容过滤（热评、转发、引用），
+      // 需要原始卡片布局，关掉小红书封面卡。
+      SettingsBoxKey.xhsGridLayout: false,
     });
     Request();
     box = await Hive.openBox('filter');

@@ -8,6 +8,8 @@ Widget networkImage(
   double? height,
   bool isAvatar = false,
   ImageWidgetBuilder? imageBuilder,
+  int? memCacheWidth,
+  int? memCacheHeight,
   BorderRadiusGeometry? borderRadius =
       const BorderRadius.all(Radius.circular(12)),
 }) {
@@ -45,6 +47,10 @@ Widget networkImage(
     height: height,
     imageUrl: imageUrl,
     imageBuilder: imageBuilder,
+    // 按控件实际显示尺寸解码，避免大图在列表里整张解码后丢弃，
+    // 明显降低滚动时的解码耗时与内存抖动。
+    memCacheWidth: memCacheWidth,
+    memCacheHeight: memCacheHeight,
     placeholder: (context, url) => placeHolder(context),
     errorWidget: (context, url, error) => placeHolder(context),
     fadeOutDuration: const Duration(milliseconds: 200),
@@ -60,6 +66,8 @@ Widget clipNetworkImage(
   double? height,
   bool isAvatar = false,
   ImageWidgetBuilder? imageBuilder,
+  int? memCacheWidth,
+  int? memCacheHeight,
   BorderRadiusGeometry? clipBorderRadius,
 }) {
   return ClipRRect(
@@ -72,6 +80,8 @@ Widget clipNetworkImage(
       height: height,
       isAvatar: isAvatar,
       imageBuilder: imageBuilder,
+      memCacheWidth: memCacheWidth,
+      memCacheHeight: memCacheHeight,
       borderRadius: null,
     ),
   );

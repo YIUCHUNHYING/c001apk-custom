@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:c001apk_flutter/components/masonry_section.dart';
@@ -61,6 +63,13 @@ class _AdaptiveCardListState extends State<AdaptiveCardList> {
   double _pinchStartColumns = 3;
   Listenable? _settingsListenable;
   VoidCallback? _settingsListener;
+  // 当前可用宽度允许的最大列数，捏合时用它兜住目标值。
+  int _maxByWidth = 4;
+  // 捏合提示：只让这一小块区域重建，不牵动整个列表。
+  final _hintColumns = ValueNotifier<int>(3);
+  final _hintVisible = ValueNotifier<bool>(false);
+  Timer? _hintTimer;
+  int _pinchTarget = 3;
   int? _anchorIndex;
   double _anchorDy = 0;
   int _attempts = 0;
@@ -184,6 +193,9 @@ class _AdaptiveCardListState extends State<AdaptiveCardList> {
   @override
   void dispose() {
     _settingsListenable?.removeListener(_settingsListener!);
+    _hintTimer?.cancel();
+    _hintColumns.dispose();
+    _hintVisible.dispose();
     _ownedController.dispose();
     super.dispose();
   }
@@ -218,12 +230,22 @@ class _AdaptiveCardListState extends State<AdaptiveCardList> {
 
   // Separate slivers must not build pagination footers just to estimate their
   // scroll extent. Wait until they enter the viewport's cache region.
-  Widget _deferredSliver(Widget Function() builder) => SliverLayoutBuilder(
-        builder: (_, constraints) =>
-            constraints.remainingCacheExtent > 0 || constraints.scrollOffset > 0
-                ? builder()
-                : const SliverToBoxAdapter(child: SizedBox.shrink()),
-      );
+  //
+  // SliverLayoutBuilder 的约束每个滚动帧都在变，builder 会逐帧执行。若每次都
+  // 新建 SliverList/delegate，整段（如图文横向卡）就会逐帧重建，滚动到这里
+  // 必然掉帧。这里把首次构建结果缓存下来，后续帧返回同一个 widget 实例，
+  // Element 走 identical 快路径直接跳过重建。
+  Widget _deferredSliver(Widget Function() builder) {
+    Widget? built;
+    return SliverLayoutBuilder(
+      builder: (_, constraints) {
+        if (constraints.remainingCacheExtent <= 0 && constraints.scrollOffset <= 0) {
+          return const SliverToBoxAdapter(child: SizedBox.shrink());
+        }
+        return built ??= builder();
+      },
+    );
+  }
 
   Iterable<Widget> _sections(int columns) sync* {
     for (var start = 0; start < widget.itemCount;) {
@@ -274,13 +296,14 @@ class _AdaptiveCardListState extends State<AdaptiveCardList> {
   Widget _buildCards(BuildContext context, double width) {
     final scale =
         (MediaQuery.textScalerOf(context).scale(16) / 16).clamp(1.0, 2.0);
-    // 小红书模式使用固定列数（2~4，双指捏合可调），但同时受可用宽度约束，
-    // 避免窄屏下挤成一团；关闭后回到按宽度自适应的原始布局。
+    // 小红书模式使用固定列数（2~4，双指捏合可调）；最小卡片宽度按 96 逻辑像素
+    // 估算，竖屏平板能捏到 4 列、手机能捏到 3 列，不再只在大屏生效。
     final xhs = _xhsEnabled;
     final maxByWidth =
-        ((width - widget.padding.horizontal + 10) / (180 * scale + 10))
+        ((width - widget.padding.horizontal + 10) / (96 * scale + 10))
             .floor()
             .clamp(1, 4);
+    _maxByWidth = maxByWidth;
     final columns = xhs
         ? _xhsColumns.clamp(2, 4).clamp(1, maxByWidth)
         : ((width - widget.padding.horizontal + 10) / (360 * scale + 10))
@@ -358,40 +381,64 @@ class _AdaptiveCardListState extends State<AdaptiveCardList> {
     return (points[0] - points[1]).distance;
   }
 
+  int _effectiveColumns(int target) =>
+      target.clamp(2, 4).clamp(1, _maxByWidth);
+
   void _onPinchDown(PointerDownEvent event) {
     _pointers[event.pointer] = event.position;
-    if (_pointers.length == 2) {
-      _pinchStartDistance = _pinchDistance();
-      _pinchStartColumns = _xhsColumns.toDouble();
-    }
+    if (_pointers.length != 2 || !_xhsEnabled) return;
+    // 第二根手指按下：开始预览列数（横滑已由 PinchGestureDetector 让位）。
+    _pinchStartDistance = _pinchDistance();
+    _pinchStartColumns = _xhsColumns.toDouble();
+    _pinchTarget = _pinchStartColumns.round().clamp(2, 4);
+    _hintColumns.value = _effectiveColumns(_pinchTarget);
+    _hintVisible.value = true;
+    _hintTimer?.cancel();
   }
 
   void _onPinchMove(PointerMoveEvent event) {
     if (!_pointers.containsKey(event.pointer)) return;
     _pointers[event.pointer] = event.position;
+    final start = _pinchStartDistance;
+    if (start == null || start <= 0 || _pointers.length < 2) return;
+    final distance = _pinchDistance();
+    if (distance <= 0) return;
+    // 往内捏（ratio<1）列数变多、卡片变小；往外捏（ratio>1）列数变少。
+    final ratio = distance / start;
+    if ((ratio - 1).abs() < .08) return;
+    _pinchTarget = (_pinchStartColumns / ratio).round().clamp(2, 4);
+    final effective = _effectiveColumns(_pinchTarget);
+    if (_hintColumns.value != effective) _hintColumns.value = effective;
   }
 
   void _onPinchUp(PointerEvent event) {
-    if (_pointers.length == 2 && _pinchStartDistance != null) {
-      final distance = _pinchDistance();
-      if (distance > 0 && _pinchStartDistance! > 0) {
-        _applyPinch(distance / _pinchStartDistance!);
-      }
-      _pinchStartDistance = null;
-    }
+    final pinching = _pointers.length >= 2;
     _pointers.remove(event.pointer);
     if (_pointers.length < 2) _pinchStartDistance = null;
+    if (!pinching) return;
+    _applyColumns(_pinchTarget);
+    _scheduleHideHint();
   }
 
-  void _applyPinch(double ratio) {
+  void _onPinchCancel(PointerEvent event) {
+    _pointers.remove(event.pointer);
+    if (_pointers.length < 2) _pinchStartDistance = null;
+    _scheduleHideHint();
+  }
+
+  void _scheduleHideHint() {
+    _hintTimer?.cancel();
+    _hintTimer = Timer(const Duration(milliseconds: 700), () {
+      if (mounted) _hintVisible.value = false;
+    });
+  }
+
+  void _applyColumns(int target) {
     if (!_xhsEnabled) return;
-    if ((ratio - 1).abs() < .08) return;
-    // 往内捏（ratio<1）列数变多、卡片变小；往外捏（ratio>1）列数变少。
-    final target = (_pinchStartColumns / ratio).round().clamp(2, 4);
-    if (target != _xhsColumns) {
-      GStorage.setXhsGridColumns(target);
-      setState(() {});
-    }
+    final effective = _effectiveColumns(target);
+    if (effective == _xhsColumns) return;
+    GStorage.setXhsGridColumns(effective);
+    if (mounted) setState(() {});
   }
 
   Widget _wrapCards(Widget cards) => widget.sliver
@@ -400,12 +447,80 @@ class _AdaptiveCardListState extends State<AdaptiveCardList> {
           onPointerDown: _onPinchDown,
           onPointerMove: _onPinchMove,
           onPointerUp: _onPinchUp,
-          onPointerCancel: _onPinchUp,
-          child: CustomScrollView(
-              key: _viewportKey,
-              controller: _scroll,
-              physics: widget.physics,
-              semanticChildCount: widget.itemCount,
-              slivers: [cards]),
+          onPointerCancel: _onPinchCancel,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CustomScrollView(
+                  key: _viewportKey,
+                  controller: _scroll,
+                  physics: widget.physics,
+                  semanticChildCount: widget.itemCount,
+                  slivers: [cards]),
+              Positioned.fill(
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: _hintVisible,
+                  builder: (context, visible, _) =>
+                      ValueListenableBuilder<int>(
+                    valueListenable: _hintColumns,
+                    builder: (context, columns, __) =>
+                        _PinchColumnsHint(columns: columns, visible: visible),
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
 }
+
+/// 捏合时的列数提示：居中浮层，只做视觉反馈，不拦截任何点击。
+class _PinchColumnsHint extends StatelessWidget {
+  const _PinchColumnsHint({required this.columns, required this.visible});
+
+  final int columns;
+  final bool visible;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return IgnorePointer(
+      child: Center(
+        child: AnimatedOpacity(
+          opacity: visible ? 1 : 0,
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOut,
+          child: AnimatedScale(
+            scale: visible ? 1 : .88,
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOut,
+            // 淡出后不再命中任何语义/绘制区域。
+            child: ExcludeSemantics(
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                decoration: BoxDecoration(
+                  color: colors.inverseSurface.withValues(alpha: .88),
+                  borderRadius: BorderRadius.circular(26),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.grid_view_rounded,
+                      size: 18, color: colors.onInverseSurface),
+                  const SizedBox(width: 8),
+                  Text(
+                    '$columns 列',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: colors.onInverseSurface,
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+

@@ -29,6 +29,7 @@ class ImageSquareScrollCard extends StatelessWidget {
 
   Widget _imageSquareScrollCardItem(
       BuildContext context, double width, Entity data) {
+    final dpr = MediaQuery.devicePixelRatioOf(context);
     return SizedBox(
       width: width,
       height: width,
@@ -40,15 +41,20 @@ class ImageSquareScrollCard extends StatelessWidget {
             clipNetworkImage(
               data.pic.toString(),
               radius: 12,
-              imageBuilder: (context, imageProvider) => Container(
-                decoration: BoxDecoration(
-                  image: DecorationImage(
-                    image: imageProvider,
-                    fit: BoxFit.cover,
-                    colorFilter: const ColorFilter.mode(
-                      Color(0x8D000000),
-                      BlendMode.darken,
-                    ),
+              width: width,
+              height: width,
+              fit: BoxFit.cover,
+              // 按显示尺寸解码，一行五张时避免整张大图解码造成掉帧。
+              memCacheWidth: (width * dpr).round().clamp(1, 4096).toInt(),
+            ),
+            // 用纯色叠加代替 DecorationImage 的 colorFilter，
+            // 省掉每帧的滤镜合成开销。
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: const Color(0x8D000000),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
               ),

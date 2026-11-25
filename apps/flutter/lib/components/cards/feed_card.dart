@@ -54,6 +54,11 @@ class FeedCard extends StatelessWidget {
 
   Widget _buildVisible(BuildContext context) {
     final compact = !isFeedContent && FeedNavigation.compactOf(context);
+    // 小红书网格开启时，信息流卡片改成「封面在上、文字与作者在下」，
+    // 与固定列网格配合；关闭开关即回到原来的完整卡片。
+    if (!isFeedContent && !compact && _coverLayoutEnabled) {
+      return _buildCoverCard(context);
+    }
     return Material(
       shape:
           !isFeedContent && FeedNavigation.selectedOf(context) == '${data.id}'
@@ -119,6 +124,174 @@ class FeedCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  // 测试等场景可能未初始化 Hive，读不到设置时保持原始卡片。
+  bool get _coverLayoutEnabled {
+    try {
+      return GStorage.xhsGridLayout;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 小红书式封面卡：大图在上，标题/正文与作者、点赞在下。
+  /// 只挑一张主图当封面，跳过热评、外链、关联行等重内容，
+  /// 也顺带降低了网格滚动时的构建与解码开销。
+  Widget _buildCoverCard(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final pictures = data.picArr ?? const <String>[];
+    final hasCover = pictures.isNotEmpty;
+    final title = data.messageTitle;
+    final hasTitle = !title.isNullOrEmpty;
+    return Material(
+      color: colors.onInverseSurface,
+      borderRadius: const BorderRadius.all(Radius.circular(12)),
+      child: InkWell(
+        borderRadius: const BorderRadius.all(Radius.circular(12)),
+        splashFactory: NoSplashFactory(),
+        onTap: () => _onViewFeed(context),
+        onLongPress: () => Get.toNamed('/copy',
+            parameters: {'text': ContentFilterProjection.displayMessage(data)}),
+        child: LayoutBuilder(builder: (context, constraints) {
+          final dense = constraints.maxWidth < 150;
+          final pad = dense ? 8.0 : 10.0;
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (hasCover)
+                _cover(context, pictures, width: constraints.maxWidth),
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                    pad, dense ? 7 : 9, pad, dense ? 8 : 10),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (hasTitle)
+                      Text(
+                        Utils.parseHtmlString(title!),
+                        maxLines: hasCover ? (dense ? 2 : 3) : (dense ? 3 : 4),
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: dense ? 13 : 14.5,
+                          height: 1.35,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    if (hasTitle && !data.message.isNullOrEmpty)
+                      SizedBox(height: dense ? 2 : 3),
+                    if (!data.message.isNullOrEmpty)
+                      ContentFilterText(
+                        key: ValueKey('feed-cover:${data.id}'),
+                        source: data.message ?? '',
+                        builder: (message) => Text(
+                          Utils.parseHtmlString(
+                              MarkdownContent.parse(message).preview),
+                          maxLines: hasCover
+                              ? (dense ? 2 : 3)
+                              : (dense ? 4 : 6),
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: dense ? 12 : 13,
+                            height: 1.45,
+                            fontWeight: hasTitle ? FontWeight.normal : FontWeight.w600,
+                            color: hasTitle
+                                ? colors.onSurfaceVariant
+                                : colors.onSurface,
+                          ),
+                        ),
+                      ),
+                    SizedBox(height: dense ? 6 : 8),
+                    _coverFooter(context, dense: dense),
+                  ],
+                ),
+              ),
+            ],
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _cover(BuildContext context, List<String> pictures,
+      {required double width}) {
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    return Stack(children: [
+      AspectRatio(
+        aspectRatio: 4 / 3,
+        child: clipNetworkImage(
+          pictures.first,
+          fit: BoxFit.cover,
+          memCacheWidth: (width * dpr).round().clamp(1, 4096).toInt(),
+          clipBorderRadius:
+              const BorderRadius.vertical(top: Radius.circular(12)),
+        ),
+      ),
+      if (pictures.length > 1)
+        Positioned(
+          right: 6,
+          bottom: 6,
+          child: _coverBadge(context, '共 ${pictures.length} 图'),
+        ),
+      if (!data.forwardSourceType.isNullOrEmpty)
+        Positioned(
+          left: 6,
+          top: 6,
+          child: _coverBadge(context, '转发'),
+        ),
+    ]);
+  }
+
+  Widget _coverBadge(BuildContext context, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: .55),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 11, color: Colors.white),
+      ),
+    );
+  }
+
+  Widget _coverFooter(BuildContext context, {required bool dense}) {
+    final colors = Theme.of(context).colorScheme;
+    final size = dense ? 18.0 : 20.0;
+    return Row(children: [
+      clipNetworkImage(
+        data.userAvatar.orEmpty,
+        radius: 50,
+        width: size,
+        height: size,
+        isAvatar: true,
+        memCacheWidth: (size * MediaQuery.devicePixelRatioOf(context))
+            .round()
+            .clamp(1, 4096)
+            .toInt(),
+      ),
+      SizedBox(width: dense ? 5 : 6),
+      Expanded(
+        child: Text(
+          data.userInfo?.username ?? '',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: dense ? 11 : 12, color: colors.outline),
+        ),
+      ),
+      if (data.likenum != null) ...[
+        Icon(Icons.thumb_up_alt_outlined,
+            size: dense ? 12 : 14, color: colors.outline),
+        const SizedBox(width: 3),
+        Text(
+          '${data.likenum}',
+          style: TextStyle(fontSize: dense ? 11 : 12, color: colors.outline),
+        ),
+      ],
+    ]);
   }
 
   Widget _summary(BuildContext context) {

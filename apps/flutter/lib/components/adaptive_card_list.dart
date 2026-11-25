@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:c001apk_flutter/components/masonry_section.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
@@ -59,7 +60,7 @@ class _AdaptiveCardListState extends State<AdaptiveCardList> {
   int? _cachedColumns;
   double _pinchStartColumns = 3;
   double _pinchScale = 1;
-  ValueListenable<Box<dynamic>>? _settingsListenable;
+  Listenable? _settingsListenable;
   VoidCallback? _settingsListener;
   int? _anchorIndex;
   double _anchorDy = 0;
@@ -334,7 +335,6 @@ class _AdaptiveCardListState extends State<AdaptiveCardList> {
   // 因此单指滚动完全不受影响。
   final _pointers = <int, Offset>{};
   double? _pinchStartDistance;
-  double _pinchStartColumns = 3;
 
   // 测试环境可能未初始化 Hive，安全读取设置：未就绪时退回原始布局。
   bool get _xhsEnabled {

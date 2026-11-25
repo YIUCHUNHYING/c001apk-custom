@@ -162,8 +162,19 @@ Widget buildBody(
               : const SizedBox(height: 10),
         );
       }
+      // 话题/应用/用户这类横向卡片在过窄的列里会把数值拆成竖排，
+      // 统一给一个最小列宽，竖屏时自动减少每行列数。
+      final compactCards = dataList.every((item) => const {
+            'topic',
+            'apk',
+            'product',
+            'user',
+            'contacts',
+            'recentHistory',
+          }.contains(item.entityType));
       return AdaptiveCardList(
         controller: commonController.scrollController,
+        minColumnWidth: compactCards ? 156 : null,
         padding: EdgeInsets.fromLTRB(
             10,
             10 + MediaQuery.paddingOf(context ?? Get.context!).top,

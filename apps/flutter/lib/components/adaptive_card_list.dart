@@ -23,6 +23,7 @@ class AdaptiveCardList extends StatefulWidget {
     this.padding = const EdgeInsets.all(10),
     this.leading,
     this.footer,
+    this.minColumnWidth,
   }) : sliver = false;
 
   const AdaptiveCardList.sliver({
@@ -33,6 +34,7 @@ class AdaptiveCardList extends StatefulWidget {
     this.leading,
     this.footer,
     this.padding = const EdgeInsets.all(10),
+    this.minColumnWidth,
   })  : sliver = true,
         controller = null,
         physics = const AlwaysScrollableScrollPhysics();
@@ -46,6 +48,11 @@ class AdaptiveCardList extends StatefulWidget {
   final Widget? leading;
   final Widget? footer;
   final bool sliver;
+
+  /// 小红书网格下单列的最小宽度。横向「图标 + 标题 + 数据」这类卡片
+  /// （话题、应用、用户）在过窄的列里会把数字拆成竖排，给个下限后
+  /// 网格会自动减少每行列数。
+  final double? minColumnWidth;
 
   @override
   State<AdaptiveCardList> createState() => _AdaptiveCardListState();
@@ -299,8 +306,10 @@ class _AdaptiveCardListState extends State<AdaptiveCardList> {
     // 小红书模式使用固定列数（2~4，双指捏合可调）；最小卡片宽度按 96 逻辑像素
     // 估算，竖屏平板能捏到 4 列、手机能捏到 3 列，不再只在大屏生效。
     final xhs = _xhsEnabled;
+    final minCardWidth = widget.minColumnWidth ?? 96.0;
     final maxByWidth =
-        ((width - widget.padding.horizontal + 10) / (96 * scale + 10))
+        ((width - widget.padding.horizontal + 10) /
+                (minCardWidth * scale + 10))
             .floor()
             .clamp(1, 4);
     _maxByWidth = maxByWidth;

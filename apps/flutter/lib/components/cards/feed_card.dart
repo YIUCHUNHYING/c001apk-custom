@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../components/cards/icon_mini_scroll_card.dart' show miniCardItem;
+import '../../components/emoji_text.dart';
 import '../../components/html_text.dart';
 import '../../components/markdown_body.dart';
 import '../../components/icon_text.dart';
@@ -353,11 +354,11 @@ class FeedCard extends StatelessWidget {
             ),
             child: ContentFilterText(
               source: reply.message ?? '',
-              builder: (message) => Text(
+              // 表情（[笑哭] / #(笑哭)）要渲染成表情图，不能再显示成文字。
+              builder: (message) => EmojiText(
                 '${reply.userInfo?.username ?? ''}：'
                 '${Utils.parseHtmlString(MarkdownContent.parse(message).preview)}',
                 maxLines: 2,
-                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 12,
                   height: 1.4,
@@ -385,7 +386,7 @@ class FeedCard extends StatelessWidget {
             Text(text, style: textStyle),
           ],
         );
-    // 用 Wrap 收尾：窄卡片上昵称会先省略，点赞/评论数换到下一行，不会溢出。
+    // 用 Wrap 收尾：窄卡片上昵称会先省略，点赞数换到下一行，不会溢出。
     return Wrap(
       spacing: dense ? 6 : 8,
       runSpacing: 4,
@@ -413,9 +414,6 @@ class FeedCard extends StatelessWidget {
         ]),
         if (data.likenum != null)
           stat(Icons.thumb_up_alt_outlined, '${data.likenum}'),
-        // 保留总评论数，和原版卡片一致。
-        if (data.replynum != null)
-          stat(Icons.message_outlined, '${data.replynum}'),
       ],
     );
   }
